@@ -32,7 +32,7 @@ def fetch_last_price(ticker):
         stock = yf.Ticker(ticker)
         # stock_info = stock.info
         stock_info = stock.fast_info
-        if not stock_info or 'last_price' not in stock_info or stock_info.last_price is None:
+        if not stock_info or stock_info.last_price is None:
             return None
         return stock_info
     except Exception as e:
