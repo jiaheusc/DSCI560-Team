@@ -8,8 +8,8 @@ from datetime import timezone
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "DSCI560&team",
-    "database": "stock_database",
+    "password": "",#your password
+    "database": "",#your database
     "autocommit": True
 }
 
