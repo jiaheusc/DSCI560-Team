@@ -8,8 +8,8 @@ from datetime import timezone
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "",#your password
-    "database": "",#your database
+    "password": "", #your password
+    "database": "", #your database name
     "autocommit": True
 }
 

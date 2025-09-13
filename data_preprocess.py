@@ -8,8 +8,8 @@ from datetime import timezone
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "",#your password
-    "database": "",#your database
+    "password": "", #your password
+    "database": "", #your database name
     "autocommit": True
 }
 
@@ -71,7 +71,9 @@ def save_daily_to_mysql(connection, daily_df):
 if __name__ == "__main__":
     conn = get_connection()
     query = "SELECT stock_id, price, volume, timestamp FROM stock_price"
+    query2 = "SELECT * FROM stocks"
     df = pd.read_sql(query, conn)
+    ticker = pd.read_sql(query2,conn)
     
     #refill missing value with the nearest timestamp
     df = refill_missing(df)
@@ -86,7 +88,11 @@ if __name__ == "__main__":
       .reset_index()
 )
     daily['daily_return'] = daily.groupby('stock_id')['close'].pct_change()
-    print(daily)
     
+    # Merge ticker column from the original ticker table
+    daily = daily.merge(ticker, on='stock_id', how='left') 
+    daily.rename(columns={'ticker':'stock_name'}, inplace=True)
+    
+    print(daily)
     save_daily_to_mysql(conn, daily)
     conn.close()
