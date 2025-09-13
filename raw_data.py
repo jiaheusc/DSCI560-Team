@@ -8,8 +8,8 @@ from datetime import timezone
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "",
-    "database": "",
+    "password": "DSCI560&team",
+    "database": "stock_database",
     "autocommit": True
 }
 
@@ -82,14 +82,41 @@ def fetch_real_time_price(tickers, poll_seconds, connection):
         connection.close()
 
 # at most 7 days
-def fetch_today_price(tickers):
+def fetch_today_price(connection,tickers):
     try:
         # can change to period="7d" for the first time
-        data = yf.download(tickers, period="1d", interval="1m", group_by='ticker')
+        data = yf.download(tickers, period="3d", interval="1m", group_by='ticker')
         if data.empty:
             print("No today stock price data")
             return None
-        return data
+        
+        cursor = connection.cursor()
+
+        for ticker in tickers:
+            if len(tickers) > 1:
+                df = data[ticker].reset_index()
+            else:
+                df = data.reset_index()
+
+            df.rename(columns={'Datetime': 'timestamp', 'Close': 'price', 'Volume': 'volume'}, inplace=True)
+            df = df[['timestamp', 'price', 'volume']].dropna()
+
+            stock_id = get_stock_id(connection, ticker)
+            if stock_id is None:
+                print(f"{ticker} not found in stocks table.")
+                continue
+
+            for _, row in df.iterrows():
+                sql = """
+                    INSERT INTO stock_price (stock_id, `timestamp`, price, volume)
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE price=VALUES(price), volume=VALUES(volume)
+                """
+                cursor.execute(sql, (stock_id, row['timestamp'].to_pydatetime(), float(row['price']), int(row['volume'])))
+        connection.commit()
+        cursor.close()
+        print("Written 3 days data")
+        
     except Exception as e:
         print(f"Error: {e}")
         return None
@@ -98,12 +125,16 @@ def fetch_today_price(tickers):
 if __name__ == "__main__":
     connection = get_connection()
     tickers = get_all_tickers(connection)
-    
+    cursor = connection.cursor()
+    cursor.execute("TRUNCATE TABLE stock_price") 
+    connection.commit()
+    cursor.close()
+    print("Cleared stock_price table.")
     # use fast_info
-    poll_seconds = 30
-    fetch_real_time_price(tickers, poll_seconds, connection)
+    # poll_seconds = 30
+    # fetch_real_time_price(tickers, poll_seconds, connection)
     
     # use download
-    # today_data = fetch_today_price(tickers)
-    # print(today_data)
-    # connection.close()
+    today_data = fetch_today_price(connection,tickers)
+    #print(today_data)
+    connection.close()
