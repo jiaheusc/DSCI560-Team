@@ -125,7 +125,7 @@ if __name__ == "__main__":
             remove_stock(port_id, stock_ticker)
 
         elif choice == '4':
-            display_all_portfolios
+            display_all_portfolios()
 
         elif choice == '5':
             print('Exit!')
