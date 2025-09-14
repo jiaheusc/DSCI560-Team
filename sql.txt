@@ -38,6 +38,22 @@ CREATE TABLE `stock_price` (
 ) ENGINE=InnoDB;
 
 
+<<<<<<< HEAD
+=======
+CREATE TABLE portfolios (
+    portfolio_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+);
+
+
+CREATE TABLE portfolio_stocks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    portfolio_id INT,
+    ticker VARCHAR(10),
+    FOREIGN KEY (portfolio_id) REFERENCES portfolios(portfolio_id) ON DELETE CASCADE
+);
+
+>>>>>>> origin/minghuaz
 db_config = {
     "host": "",
     "port": 3306,
