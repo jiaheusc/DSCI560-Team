@@ -55,7 +55,6 @@ def get_stock_id(connection, ticker):
     return row[0] if row else None
 
 def upsert_stock_price(connection, stock_id, price, volume, ts_sec):
-    print("here")
     sql = """
         INSERT INTO stock_price (stock_id, `timestamp`, price, volume)
         VALUES (%s, %s, %s, %s)
