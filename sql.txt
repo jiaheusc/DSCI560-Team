@@ -41,6 +41,7 @@ CREATE TABLE `stock_price` (
 CREATE TABLE portfolios (
     portfolio_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 
