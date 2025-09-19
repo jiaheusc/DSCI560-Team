@@ -11,3 +11,12 @@ CREATE TABLE `stock_1d` (
   FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`stock_id`),
   UNIQUE KEY `uniq_stock_time` (`stock_id`, `timestamp`),
 ) ENGINE=InnoDB;
+
+CREATE TABLE positions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  trade_date DATE NOT NULL,
+  cash DECIMAL(18,2) NOT NULL,
+  total_value DECIMAL(18,2) NOT NULL,
+  details JSON NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
