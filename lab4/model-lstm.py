@@ -11,8 +11,8 @@ import joblib
 conn = mysql.connector.connect(
     host="localhost", 
     user="root", 
-    password="DSCI560&team",
-    database="stock_database", autocommit=True
+    password="",
+    database="", autocommit=True
 )
 query = "SELECT stock_id, trade_date, close FROM stock_1d ORDER BY trade_date ASC;"
 df = pd.read_sql(query, conn)
