@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 import joblib
-
+import os
 # load data
 conn = mysql.connector.connect(
     host="localhost", 
