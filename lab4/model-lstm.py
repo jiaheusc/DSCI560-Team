@@ -6,13 +6,23 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 import joblib
+import torch, numpy as np, random, os
 
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(42)
 # load data
 conn = mysql.connector.connect(
     host="localhost", 
     user="root", 
-    password="",
-    database="", autocommit=True
+    password = "DSCI560&team",
+    database = "stock_database", autocommit=True
 )
 query = "SELECT stock_id, trade_date, close FROM stock_1d ORDER BY trade_date ASC;"
 df = pd.read_sql(query, conn)
