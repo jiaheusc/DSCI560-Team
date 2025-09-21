@@ -5,8 +5,8 @@ from prophet import Prophet
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "",
-    "database": "",
+    "password" : "",
+    "database" : "",
     "autocommit": True
 }
 
@@ -64,14 +64,15 @@ def build_prophet_model(connection, stock_id):
         return None
 
 def clear_table(connection, table_name):
-    sql = f"TRUNCATE TABLE {table_name};"
     cursor = connection.cursor()
     try:
-        cursor.execute(sql)
-    except Exception as e:
-        print(f"Error: {e}")
-        connection.rollback()
-        raise
+        cursor.execute(f"TRUNCATE TABLE {table_name};")
+    except mysql.errors.ProgrammingError as e:
+        if e.errno == 1146:
+            # Table doesn't exist—just skip clearing
+            print(f"Table {table_name} not found, skipping truncate.")
+        else:
+            raise
     finally:
         cursor.close()
 
