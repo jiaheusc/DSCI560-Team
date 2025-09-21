@@ -124,7 +124,7 @@ def load_holdings_from_db():
 
     if df.empty:
         # empty holdings
-        return {}, 10000, 10000
+        return {sid: 0 for sid in portfolio_test_stocks_id}, 10000, 10000
 
     holdings = {row["stock_id"]: row["shares"] for _, row in df.iterrows()}
     cash = df["cash"].iloc[0]  
@@ -135,7 +135,8 @@ def load_holdings_from_db():
 
 holdings, cash, portfolio_value_before = load_holdings_from_db()
 
-
+for sid in portfolio_test_stocks_id:
+    holdings.setdefault(sid, 0)
 
 
 def buy_and_sell(portfolio_stocks_id, cash):
