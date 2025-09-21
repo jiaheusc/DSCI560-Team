@@ -187,10 +187,10 @@ def buy_and_sell(portfolio_stocks_id, cash):
         money = cash * ( w / total )
         share = int(money // curr_price)
         holdings[id] += share
-        #cash -= share * curr_price
+        cash -= share * curr_price
 
 
-    portfolio_value = 0
+    portfolio_value = cash
     for id, curr_price, pred_price in all_stocks:
         portfolio_value += holdings[id] * curr_price
     
@@ -212,7 +212,7 @@ for stock_id, shares in holdings.items():
             INSERT INTO holdings (stock_id, shares, cash, portfolio_value)
             VALUES (%s, %s, %s, %s)
         """
-    cursor.execute(query, (stock_id, shares, 0, portfolio_value))
+    cursor.execute(query, (stock_id, shares, cash, portfolio_value))
 
 connection.commit()
 
