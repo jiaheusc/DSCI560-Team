@@ -4,5 +4,6 @@ CREATE TABLE IF NOT EXISTS reddit_posts (
     content TEXT,
     author_masked VARCHAR(50),
     timestamp DATETIME,
-    keywords TEXT
+    keywords TEXT,
+    image_text TEXT
 )
