@@ -1,0 +1,8 @@
+praw
+mysql-connector-python
+beautifulsoup4
+nltk
+pytesseract
+Pillow
+requests
+

@@ -16,11 +16,12 @@ from io import BytesIO
 #run once
 nltk.download('punkt')
 nltk.download('stopwords')
+nltk.download('punkt_tab')
 
 db = mysql.connector.connect(
     host = "localhost",
-    user = "",
-    password = "",
+    user = "root",
+    password = "DSCI560&team",
     database = "reddit_tech"
 )
 
@@ -28,9 +29,9 @@ cursor = db.cursor()
 
 
 reddit = praw.Reddit(
-    client_id = "Dry_Wrongdoer3477",    
-    client_secret = "MLSyPOBc8GCT2gk_8Yk6B-jaJS9swQ", 
-    user_agent = "Lab5"
+    client_id = "G65tr8NzM-5oR0vrnHLw5A",    
+    client_secret = "688TvEkmV-RJrLkx6oXaZlWcosq0yA", 
+    user_agent = "linux:lab5:v1.0 (by u/jiahecai)"
 )
 
 def clean_text(raw_text):
