@@ -7,9 +7,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import subprocess
 import time
-doc2vec_model = Doc2Vec.load("doc2vec.model")
-normalizer = joblib.load("normalizer.joblib")
-kmeans_model = joblib.load('kmeans_model.joblib')
 
 db = mysql.connector.connect(
     host = "localhost",
@@ -38,6 +35,10 @@ def run_pipeline(total_posts):
         print(f"[ERROR] A script failed: {e}")
         
 def predict_cluster_for_text(text):
+    doc2vec_model = Doc2Vec.load("doc2vec.model")
+    normalizer = joblib.load("normalizer.joblib")
+    kmeans_model = joblib.load('kmeans_model.joblib')
+    
     words = text.lower().split()
     vec = doc2vec_model.infer_vector(words)
     X = vec.reshape(1, -1)
