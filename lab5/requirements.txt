@@ -6,3 +6,8 @@ pytesseract
 Pillow
 requests
 gensim
+scikit-learn
+numpy
+pandas
+matplotlib
+seaborn
