@@ -7,9 +7,12 @@ from sklearn.preprocessing import Normalizer
 from sklearn.metrics import silhouette_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
+from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import json
 import joblib
+
+
 
 db = mysql.connector.connect(
     host = "localhost",
@@ -17,6 +20,34 @@ db = mysql.connector.connect(
     password = "",
     database = ""
 )
+
+def clear_table():
+    cursor = db.cursor()
+    create_sql = '''
+            CREATE TABLE IF NOT EXISTS clusters (
+                cluster_id        INT PRIMARY KEY,
+                keywords          JSON NOT NULL
+            ) ENGINE=InnoDB
+        '''
+    create_sql_mes = '''
+            CREATE TABLE IF NOT EXISTS clusters_messages (
+                post_id         VARCHAR(20) PRIMARY KEY,
+                cluster_id      INT,
+                title           TEXT,
+                content         TEXT,
+                tsne_x          REAL,
+                tsne_y          REAL
+            ) ENGINE=InnoDB
+        '''
+    sql_c = "TRUNCATE TABLE clusters"
+    sql_m = "TRUNCATE TABLE clusters_messages"
+    cursor.execute(create_sql)
+    cursor.execute(create_sql_mes)
+    cursor.execute(sql_c)
+    cursor.execute(sql_m)
+    db.commit()
+    print("[!] Table reddit_posts has been cleared.")
+    cursor.close()
 
 def parse_embedding(x):
     s = x.strip()
@@ -49,7 +80,7 @@ def get_best_k(X):
     best_k = k_range[best_k_index]
     return best_k
 
-def k_means_model(df):
+def k_mean_model(df):
     X = np.array(df['embedding_list'].tolist())
     normalizer = Normalizer()
     Xn = normalizer.fit_transform(X)
@@ -60,10 +91,45 @@ def k_means_model(df):
     cluster_labels = k_means.fit_predict(Xn)
     df['cluster'] = cluster_labels
 
+    joblib.dump(normalizer, "normalizer.joblib")
     joblib.dump(k_means, 'kmeans_model.joblib')
     return df, Xn
 
-def generate_cluster_samples(df):
+def generate_wordcloud(text, cluster_id):
+    wordcloud = WordCloud(
+        width=800, 
+        height=400, 
+        background_color='white',
+        max_words=50,
+        colormap='viridis'
+    ).generate(text)
+    
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.title(f'Cluster {cluster_id} - Word Cloud')
+    plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+def display_cluster_messages(df, cluster_id, keywords):
+    cluster_df = df[df['cluster'] == cluster_id]
+    
+    print(f"\n{'-'*40}")
+    print(f"CLUSTER {cluster_id}")
+    print(f"Keywords: {', '.join(keywords[:5])}")
+    
+    sample_size = min(5, len(cluster_df))
+    samples = cluster_df.sample(n=sample_size, random_state=42)
+    
+    for idx, (_, row) in enumerate(samples.iterrows(), 1):
+        print(f"\n--- Message {idx} ---")
+        print(f"Title: {row['title'][:100]}{'...' if len(row['title']) > 100 else ''}")
+        if pd.notna(row['content']) and row['content'].strip():
+            content_preview = row['content'][:150] + '...' if len(row['content']) > 150 else row['content']
+            print(f"Content: {content_preview}")
+    print(f"\n{'-'*40}")
+
+def generate_cluster_samples(df, Xn):
     #TF-IDF to find keywords in each cluster
     df['full_text'] = df['title'].fillna('') + ' ' + df['content'].fillna('')
     aggregated_texts = df.groupby('cluster')['full_text'].apply(lambda texts: ' '.join(texts)).tolist()
@@ -75,34 +141,62 @@ def generate_cluster_samples(df):
     tfidf_matrix = vectorizer.fit_transform(aggregated_texts)
     feature_names = vectorizer.get_feature_names_out()
     cluster_ids = sorted(df['cluster'].unique())
+    
     cluster_keywords = {}
     for i, cluster_id in enumerate(cluster_ids):
+        cluster_texts = ' '.join(df[df['cluster'] == cluster_id]['full_text'])
+        generate_wordcloud(cluster_texts, cluster_id)
+
         row = tfidf_matrix.toarray()[i]
         top_indices = row.argsort()[-5:][::-1]
         top_words = [feature_names[index] for index in top_indices]
         cluster_keywords[cluster_id] = top_words
 
-    # print clusters with samples
-    print("--- Cluster with Samples ---")
+    rows = []
     for cluster_id, keywords in cluster_keywords.items():
-        print(f"\nCluster {cluster_id}:")
-        print(f"Keywords: {', '.join(keywords)}")
-        
-        cluster_df = df[df['cluster'] == cluster_id]
-        sample_size = min(5, len(cluster_df)) 
-        sample_titles = cluster_df.sample(n=sample_size, random_state=42)['title']
-        
-        print("Sample Post titles:")
-        for title in sample_titles:
-            print(f"{title}\n")
+        keywords_json = json.dumps(keywords)
+        rows.append((int(cluster_id), keywords_json))
+    
+    insert_sql = '''
+            INSERT INTO clusters (cluster_id, keywords)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE keywords = VALUES(keywords)
+        '''
+    cursor = db.cursor()
+    cursor.executemany(insert_sql, rows)
+    db.commit()
 
-def generate_plot(df, Xn):
     # plot
-    cluster_ids = sorted(df['cluster'].unique())
     tsne = TSNE(n_components=2, perplexity=30, max_iter=300, random_state=42)
     tsne_results = tsne.fit_transform(Xn)
     df['tsne_x'] = tsne_results[:, 0]
     df['tsne_y'] = tsne_results[:, 1]
+
+    insert_sql_mes = '''
+            INSERT INTO clusters_messages (post_id, cluster_id, title, content, tsne_x, tsne_y)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                cluster_id = VALUES(cluster_id),
+                title = VALUES(title),
+                content = VALUES(content),
+                tsne_x = VALUES(tsne_x),
+                tsne_y = VALUES(tsne_y)
+        '''
+    
+    message_rows = []
+    for _, row in df.iterrows():
+        message_rows.append((
+            row['id'],
+            int(row['cluster']),
+            row['title'],
+            row['content'],
+            float(row['tsne_x']),
+            float(row['tsne_y'])
+        ))
+    cursor.executemany(insert_sql_mes, message_rows)
+    db.commit()
+    cursor.close()
+
     plt.figure(figsize=(16, 10))
     sns.scatterplot(
         x='tsne_x', y='tsne_y',
@@ -118,9 +212,10 @@ def generate_plot(df, Xn):
     plt.legend(title='Cluster')
     plt.show()
 
+
 if __name__ == "__main__":
+    clear_table()
     df = load_data()
-    [df_w_cluster, Xn] = k_means_model(df)
-    generate_cluster_samples(df_w_cluster)
-    generate_plot(df_w_cluster, Xn)
+    [df_w_cluster, Xn] = k_mean_model(df)
+    generate_cluster_samples(df_w_cluster, Xn)
     db.close()

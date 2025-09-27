@@ -33,6 +33,7 @@ for row in rows:
 model = Doc2Vec(vector_size=100, min_count=2, epochs=40)
 model.build_vocab(documents)
 model.train(documents, total_examples=model.corpus_count, epochs=model.epochs)
+model.save("doc2vec.model")
 
 # create embeddings table
 cursor.execute("""
