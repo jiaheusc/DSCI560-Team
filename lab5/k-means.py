@@ -17,7 +17,7 @@ import joblib
 db = mysql.connector.connect(
     host = "localhost",
     user = "root",
-    password = "DSCI560&team",
+    password = "",
     database = "reddit_tech"
 )
 
