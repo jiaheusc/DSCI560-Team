@@ -5,7 +5,8 @@ from gensim.models.doc2vec import Doc2Vec
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
-
+import subprocess
+import time
 doc2vec_model = Doc2Vec.load("doc2vec.model")
 normalizer = joblib.load("normalizer.joblib")
 kmeans_model = joblib.load('kmeans_model.joblib')
@@ -13,10 +14,29 @@ kmeans_model = joblib.load('kmeans_model.joblib')
 db = mysql.connector.connect(
     host = "localhost",
     user = "root",
-    password = "",
-    database = ""
+    password = "DSCI560&team",
+    database = "reddit_tech"
 )
 
+def run_pipeline(total_posts):
+    try:
+        # 1. Run reddit_fetch.py with total_posts
+        print(f"\n[INFO] Running reddit_fetch.py with total_posts={total_posts}...")
+        subprocess.run(["python", "reddit_fetch.py", str(total_posts)], check=True)
+
+        # 2. Run content_abstraction.py
+        print("[INFO] Running content_abstraction.py...")
+        subprocess.run(["python", "content_abstraction.py"], check=True)
+
+        # 3. Run k-means.py
+        print("[INFO] Running k-means.py...")
+        subprocess.run(["python", "k-means.py"], check=True)
+
+        print("[INFO] Pipeline finished successfully.\n")
+
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] A script failed: {e}")
+        
 def predict_cluster_for_text(text):
     words = text.lower().split()
     vec = doc2vec_model.infer_vector(words)
@@ -74,18 +94,34 @@ def visualize_cluster(cluster_id):
     
 
 if __name__ == "__main__":
-
-    print("Please enter context")
-    print("Enter q to quit\n")
     try:
+        # Ask user for interval in minutes and total_posts
+        interval_minutes = int(input("Enter interval (in minutes) between runs: "))
+        total_posts = int(input("Enter total_posts for reddit_fetch.py: "))
+
+        print(f"\n[INFO] Starting pipeline every {interval_minutes} minutes...\nPress Ctrl+C to stop.")
+
         while True:
-            user_input = input("please enter text: ")
-            if user_input.lower() == 'q':
-                break
-            if not user_input.strip():
-                continue
-            cluster_id = predict_cluster_for_text(user_input)
-            visualize_cluster(cluster_id)
-    finally:
-        db.close()
+            run_pipeline(total_posts)
+            print("Please enter context")
+            print("Enter q to quit\n")
+            try:
+                while True:
+                    user_input = input("Please enter text: ")
+                    if user_input.lower() == 'q':
+                        break
+                    if not user_input.strip():
+                        continue
+                    cluster_id = predict_cluster_for_text(user_input)
+                    visualize_cluster(cluster_id)
+            finally:
+                db.close()
+            print(f"\n[INFO] Waitng pipeline every {interval_minutes}minutes")
+            time.sleep(interval_minutes * 60)  # convert minutes → seconds
+
+    except KeyboardInterrupt:
+        print("\n[INFO] Stopped by user.")
+    except Exception as e:
+        print(f"[ERROR] {e}")
+    
         

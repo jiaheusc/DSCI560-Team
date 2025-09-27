@@ -17,8 +17,8 @@ import joblib
 db = mysql.connector.connect(
     host = "localhost",
     user = "root",
-    password = "",
-    database = ""
+    password = "DSCI560&team",
+    database = "reddit_tech"
 )
 
 def clear_table():
