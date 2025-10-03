@@ -121,6 +121,47 @@ def parse_well_data(text, filename):
             data['well_name'] = well_name_match.group(1).strip()
             break
 
+    # latitude & longitude
+    longitude_patterns = [
+        r'Longitude:?\s*(-?\d+)°\s*(\d+)\'\s*([\d.]+)\"\s*([NSEW])',
+        r'Longitude:?\s*(-?\d+)°\s*(\d+)\'\s*([\d.]+)\s*([NSEW])',
+        r'\bLatitude of Well Head\s*:?\s*(-?\d+)°\s*([\d.]+)\"(?:\s*([NSEW]))?'
+    ]
+
+    for pattern in longitude_patterns:
+        lon_match = re.search(pattern, text, re.IGNORECASE)
+        if lon_match:
+            parts = lon_match.groups()
+            deg, min_val, sec_str = parts[0], parts[1], parts[2]
+            direction = ""
+            if len(parts) > 3 and parts[3]:
+                direction = parts[3]
+            else:
+                direction = 'W'
+            full_longitude = f"{deg}° {min_val}' {sec_str}\" {direction}".strip()
+            data['longitude'] = full_longitude
+            break
+    
+    latitude_patterns = [
+        r'Latitude:?\s*(-?\d+)°\s*(\d+)\'\s*([\d.]+)\"\s*([NSEW])',
+        r'Latitude:?\s*(-?\d+)°\s*(\d+)\'\s*([\d.]+)\s*([NSEW])',
+        r'\bLatitude of Well Head\s*:?\s*(-?\d+)°\s*([\d.]+)\"(?:\s*([NSEW]))?'
+    ]
+
+    for pattern in latitude_patterns:
+        lat_match = re.search(pattern, text, re.IGNORECASE)
+        if lat_match:
+            parts = lat_match.groups()
+            deg, min_val, sec_str = parts[0], parts[1], parts[2]
+            direction = ""
+            if len(parts) > 3 and parts[3]:
+                direction = parts[3]
+            else:
+                direction = 'N'
+            full_latitude = f"{deg}° {min_val}' {sec_str}\" {direction}".strip()
+            data['latitude'] = full_latitude
+            break
+    
     upsert_well_data(data)
 
     
