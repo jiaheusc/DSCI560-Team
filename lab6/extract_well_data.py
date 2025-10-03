@@ -106,6 +106,20 @@ def parse_well_data(text, filename):
         if api_match:
             data["api"] = api_match.group(1)
             break
+    
+    # well name
+    well_name_patterns = [
+        r'\bWell\sName(?:(?:\s+and)?\s+Number)?\s*[:\n]\s*([^\n\r]+)',
+        r'Well Name and Number\s*\n\s*([A-Za-z0-9&\.\-\s]+)(?=\s*\n\s*(?:Qtr-Qtr|Section|Operator|Location|Footages|Field|Address|County|API|Total))',
+        r'Well Name and Number\s*\n\s*(.+)',
+        r'Well Name:\s*([^\n]+)'
+    ]
+
+    for pattern in well_name_patterns:
+        well_name_match = re.search(pattern, text)
+        if well_name_match:
+            data['well_name'] = well_name_match.group(1).strip()
+            break
 
     upsert_well_data(data)
 
