@@ -22,10 +22,7 @@ def clear_table():
             longitude_raw               VARCHAR(32),
             latitude_raw                VARCHAR(32),
             well_name                   VARCHAR(128),
-            street                      VARCHAR(128),
-            city                        VARCHAR(32),
-            state                       CHAR(2),
-            zipcode                     VARCHAR(10),
+            address                     VARCHAR(128),
 
             well_status                 VARCHAR(64),
             well_type                   VARCHAR(64),
