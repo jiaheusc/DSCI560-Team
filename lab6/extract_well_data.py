@@ -1,6 +1,7 @@
 import mysql.connector
 import re
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, pdfinfo_from_path
+import multiprocessing
 import pytesseract
 import os
 
@@ -41,23 +42,31 @@ def clear_table():
     db.commit()
     cursor.close()
 
+def ocr_page(image):
+    return pytesseract.image_to_string(image)
 
 def extract_text_from_pdf(pdf_path):
     try:
-        images = convert_from_path(pdf_path, dpi=150, grayscale=True)
-        page_limit = 160
-        total_pages = len(images)
-        pages_to_process = total_pages
+        batch_size = 50
+        info = pdfinfo_from_path(pdf_path)
+        total_pages = info["Pages"]
+        text_chunks = []
+        for i in range(1, total_pages + 1, batch_size):
+            first_page = i
+            last_page = min(i + batch_size - 1, total_pages)
+            images_batch = convert_from_path(
+                pdf_path,
+                # dpi=150,
+                first_page=first_page,
+                last_page=last_page,
+                # use_threads=True 
+            )
+            with multiprocessing.Pool() as pool:
+                results = pool.map(ocr_page, images_batch)
+            
+            text_chunks.append("\n".join(results))
 
-        full_text = ""
-        if page_limit and page_limit < total_pages:
-            pages_to_process = page_limit
-
-        for i in range(pages_to_process):
-            image = images[i]
-            full_text += pytesseract.image_to_string(image) + "\n"
-        print("finish extract text from pdf")
-        return full_text
+        return "\n".join(text_chunks)
     except Exception as e:
         print(f"Error: {e}")
         return ""
