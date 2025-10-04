@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 
-$conn = new mysqli("localhost", "your_mysql_user", "your_mysql_password", "DS560Team6");
+$conn = new mysqli("localhost", "root", "DSCI560&team", "DS560Team6");
 
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
