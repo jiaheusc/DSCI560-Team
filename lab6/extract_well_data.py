@@ -8,7 +8,7 @@ import os
 db = mysql.connector.connect(
     host = "localhost",
     user = "root",
-    password = os.getenv("DB_PASSWORD"),
+    password = '',
     database = "DS560Team6"
 )
 
@@ -69,10 +69,15 @@ def extract_text_from_pdf(pdf_path):
 
 def upsert_well_data(data):
     cursor = db.cursor()
-    sql = '''
-        INSERT INTO wells (filename, api, longitude_raw, latitude_raw, well_name, address)
-        VALUES (%(filename)s, %(api)s, %(longitude)s, %(latitude)s, %(well_name)s, %(address)s)
-    '''
+
+    sql = """ INSERT INTO wells (filename, api, longitude_raw, latitude_raw, well_name, address) 
+        VALUES (%(filename)s, %(api)s, %(longitude)s, %(latitude)s, %(well_name)s, %(address)s) AS new
+        ON DUPLICATE KEY UPDATE
+        wells.filename      = COALESCE(NULLIF(new.filename, ''), wells.filename),
+        wells.longitude_raw = COALESCE(NULLIF(new.longitude_raw, ''), wells.longitude_raw),
+        wells.latitude_raw  = COALESCE(NULLIF(new.latitude_raw, ''), wells.latitude_raw),
+        wells.well_name     = COALESCE(NULLIF(new.well_name, ''), wells.well_name),
+        wells.address       = COALESCE(NULLIF(new.address, ''), wells.address);"""
     cursor.execute(sql, data)
     db.commit()
     cursor.close()
