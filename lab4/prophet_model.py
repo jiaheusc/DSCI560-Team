@@ -1,12 +1,15 @@
 import pandas as pd
 import mysql.connector as mysql
 from prophet import Prophet
-
+import warnings
+warnings.filterwarnings(
+    "ignore"
+)
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password" : "",
-    "database" : "",
+    "password" : "DSCI560&team",
+    "database" : "stock_database",
     "autocommit": True
 }
 
@@ -43,9 +46,9 @@ def build_prophet_model(connection, stock_id):
         df['trade_date'] = pd.to_datetime(df['trade_date'])
 
         df.rename(columns={'trade_date': 'ds', 'close': 'y'}, inplace=True)
-
         model = Prophet(weekly_seasonality=True, daily_seasonality=True)
         model.fit(df)
+        
         future = model.make_future_dataframe(periods=30, freq='B')
         forecast = model.predict(future)
 

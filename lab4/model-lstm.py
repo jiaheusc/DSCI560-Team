@@ -7,7 +7,10 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 import joblib
 import torch, numpy as np, random, os
-
+import warnings
+warnings.filterwarnings(
+    "ignore"
+)
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
