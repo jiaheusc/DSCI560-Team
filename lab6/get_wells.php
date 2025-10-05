@@ -9,7 +9,7 @@ if ($conn->connect_error) {
 
 $sql = "SELECT w.*, s.* 
         FROM wells w 
-        LEFT JOIN stimulations s ON w.api = s.well_api";
+        LEFT JOIN stimulations s ON w.api = s.api";
 $result = $conn->query($sql);
 
 $rows = [];
