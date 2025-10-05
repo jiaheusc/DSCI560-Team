@@ -3,7 +3,7 @@ CREATE TABLE `stocks` (
   `ticker` VARCHAR(10) NOT NULL,
   PRIMARY KEY (`stock_id`),
   UNIQUE KEY `uniq_ticker` (`ticker`)
-) ENGINE=InnoDB
+) ENGINE=InnoDB;
 
 INSERT INTO stocks (ticker) VALUES
 ('AMD'),

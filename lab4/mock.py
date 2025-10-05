@@ -1,14 +1,18 @@
 import mysql.connector
 import pandas as pd
 import yfinance as yf
-
+import warnings
+warnings.filterwarnings(
+    "ignore"
+)
 portfolio_test_stocks_id = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
 
 connection = mysql.connector.connect(
     host = "localhost",
     user = "root",
-    password = "",
-    database = ""
+    password = "DSCI560&team",
+    database = "stock_database",
+    autocommit= True
 )
 
 

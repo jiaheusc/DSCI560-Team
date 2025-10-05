@@ -5,8 +5,8 @@ import numpy as np
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "",
-    "database": "",
+    "password" : "DSCI560&team",
+    "database" : "stock_database",
     "autocommit": True
 }
 

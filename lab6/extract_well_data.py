@@ -9,7 +9,7 @@ import os
 db = mysql.connector.connect(
     host = "localhost",
     user = "root",
-    password = os.getenv("DB_PASSWORD"),
+    password = '',
     database = "DS560Team6"
 )
 
@@ -103,6 +103,7 @@ def extract_text_from_pdf(pdf_path):
 
 def upsert_well_data(data):
     cursor = db.cursor()
+
     sql = """ INSERT INTO wells (
         filename, api, longitude_raw, latitude_raw, well_name, address
     ) VALUES (
@@ -115,6 +116,7 @@ def upsert_well_data(data):
         wells.well_name     = COALESCE(NULLIF(new.well_name, ''), wells.well_name),
         wells.address       = COALESCE(NULLIF(new.address, ''), wells.address);
     """
+
     cursor.execute(sql, data)
     db.commit()
     cursor.close()

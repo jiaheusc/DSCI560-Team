@@ -1,11 +1,14 @@
 import mysql.connector as mysql
 import yfinance as yf
-
+import warnings
+warnings.filterwarnings(
+    "ignore"
+)
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "",
-    "database": "",
+    "password" : "DSCI560&team",
+    "database" : "stock_database",
     "autocommit": True
 }
 

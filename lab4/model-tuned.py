@@ -4,7 +4,10 @@ import torch.nn as nn
 import torch.optim as optim
 from datetime import date
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-
+import warnings
+warnings.filterwarnings(
+    "ignore"
+)
 # load data
 SEQ_LEN = 30
 FINE_TUNE_EPOCHS = 10
@@ -14,8 +17,8 @@ table_name = "stock_forecasts"
 conn = mysql.connector.connect(
     host="localhost",
     user="root",
-    password="",
-    database="",
+    password = "DSCI560&team",
+    database = "stock_database",
     autocommit=True
 )
 
