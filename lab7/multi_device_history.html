@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_3b315c751e8080e1e98d5e7057897a29 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.10.2/jquery-ui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/iso8601-js-period@0.2.1/iso8601.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.1/dist/leaflet.timedimension.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/default.min.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.1/dist/leaflet.timedimension.control.css"/>
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_3b315c751e8080e1e98d5e7057897a29" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_3b315c751e8080e1e98d5e7057897a29 = L.map(
+                "map_3b315c751e8080e1e98d5e7057897a29",
+                {
+                    center: [37.7749, -122.4194],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 3,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_9aa35afd6e10c57e87fdcf72e1aa00ec = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_9aa35afd6e10c57e87fdcf72e1aa00ec.addTo(map_3b315c751e8080e1e98d5e7057897a29);
+        
+    
+            L.Control.TimeDimensionCustom = L.Control.TimeDimension.extend({
+                _getDisplayDateFormat: function(date){
+                    var newdate = new moment(date);
+                    console.log(newdate)
+                    return newdate.format("YYYY-MM-DD HH:mm:ss");
+                }
+            });
+            map_3b315c751e8080e1e98d5e7057897a29.timeDimension = L.timeDimension(
+                {
+                    period: "PT5S",
+                }
+            );
+            var timeDimensionControl = new L.Control.TimeDimensionCustom(
+                {
+  "position": "bottomleft",
+  "minSpeed": 0.1,
+  "maxSpeed": 10,
+  "autoPlay": true,
+  "loopButton": false,
+  "timeSliderDragUpdate": false,
+  "speedSlider": true,
+  "playerOptions": {
+  "transitionTime": 200,
+  "loop": false,
+  "startOver": true,
+},
+}
+            );
+            map_3b315c751e8080e1e98d5e7057897a29.addControl(this.timeDimensionControl);
+
+            var geoJsonLayer = L.geoJson({"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281132, 34.026162]}, "properties": {"time": "2025-10-09T19:33:10.594000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 19:33:10.594000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281132, 34.026162]}, "properties": {"time": "2025-10-09T19:25:27.305000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 19:25:27.305000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281132, 34.026162]}, "properties": {"time": "2025-10-09T19:25:26.422000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 19:25:26.422000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.2811, 34.026299]}, "properties": {"time": "2025-10-09T19:17:57.166000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 19:17:57.166000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281103, 34.026158]}, "properties": {"time": "2025-10-09T19:10:19.655000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 19:10:19.655000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281133, 34.026162]}, "properties": {"time": "2025-10-09T19:02:44.456000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 19:02:44.456000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281137, 34.026158]}, "properties": {"time": "2025-10-09T18:52:14.418000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:52:14.418000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.28113, 34.026125]}, "properties": {"time": "2025-10-09T18:44:13.557000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:44:13.557000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.2811, 34.026154]}, "properties": {"time": "2025-10-09T18:41:04.957000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:41:04.957000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281132, 34.026161]}, "properties": {"time": "2025-10-09T18:37:05.473000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:37:05.473000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281088, 34.026107]}, "properties": {"time": "2025-10-09T18:29:29.727000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:29:29.727000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281071, 34.026113]}, "properties": {"time": "2025-10-09T18:29:07.544000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:29:07.544000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281166, 34.026069]}, "properties": {"time": "2025-10-09T18:28:50.634000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:28:50.634000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.28111, 34.026141]}, "properties": {"time": "2025-10-09T18:28:08.368000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:28:08.368000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.28112, 34.026162]}, "properties": {"time": "2025-10-09T18:10:18.572000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 18:10:18.572000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-118.281145, 34.026136]}, "properties": {"time": "2025-10-09T17:54:32.701000", "style": {"color": "red"}, "icon": "circle", "popup": "Device 1 | 2025-10-09 17:54:32.701000"}}]}, {
+                    pointToLayer: function (feature, latLng) {
+                        if (feature.properties.icon == 'marker') {
+                            if(feature.properties.iconstyle){
+                                return new L.Marker(latLng, {
+                                    icon: L.icon(feature.properties.iconstyle)});
+                            }
+                            //else
+                            return new L.Marker(latLng);
+                        }
+                        if (feature.properties.icon == 'circle') {
+                            if (feature.properties.iconstyle) {
+                                return new L.circleMarker(latLng, feature.properties.iconstyle)
+                                };
+                            //else
+                            return new L.circleMarker(latLng);
+                        }
+                        //else
+
+                        return new L.Marker(latLng);
+                    },
+                    style: function (feature) {
+                        return feature.properties.style;
+                    },
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties.popup) {
+                        layer.bindPopup(feature.properties.popup);
+                        }
+                        if (feature.properties.tooltip) {
+                        layer.bindTooltip(feature.properties.tooltip);
+                        }
+                    }
+                })
+
+            var timestamped_geo_json_7daad59a1b7a8673e3296d7cca5b86d2 = L.timeDimension.layer.geoJson(
+                geoJsonLayer,
+                {
+                    updateTimeDimension: true,
+                    addlastPoint: true,
+                    duration: undefined,
+                }
+            ).addTo(map_3b315c751e8080e1e98d5e7057897a29);
+        
+    
+            L.Control.TimeDimensionCustom = L.Control.TimeDimension.extend({
+                _getDisplayDateFormat: function(date){
+                    var newdate = new moment(date);
+                    console.log(newdate)
+                    return newdate.format("YYYY-MM-DD HH:mm:ss");
+                }
+            });
+            map_3b315c751e8080e1e98d5e7057897a29.timeDimension = L.timeDimension(
+                {
+                    period: "PT5S",
+                }
+            );
+            var timeDimensionControl = new L.Control.TimeDimensionCustom(
+                {
+  "position": "bottomleft",
+  "minSpeed": 0.1,
+  "maxSpeed": 10,
+  "autoPlay": true,
+  "loopButton": false,
+  "timeSliderDragUpdate": false,
+  "speedSlider": true,
+  "playerOptions": {
+  "transitionTime": 200,
+  "loop": false,
+  "startOver": true,
+},
+}
+            );
+            map_3b315c751e8080e1e98d5e7057897a29.addControl(this.timeDimensionControl);
+
+            var geoJsonLayer = L.geoJson({"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.314933, 34.134258]}, "properties": {"time": "2025-10-09T19:36:08.070000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:36:08.070000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.314898, 34.134256]}, "properties": {"time": "2025-10-09T19:33:08.100000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:33:08.100000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.314913, 34.134262]}, "properties": {"time": "2025-10-09T19:30:08.111000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:30:08.111000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315001, 34.134532]}, "properties": {"time": "2025-10-09T19:27:08.118000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:27:08.118000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316356, 34.13474]}, "properties": {"time": "2025-10-09T19:24:08.170000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:24:08.170000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.31699, 34.134655]}, "properties": {"time": "2025-10-09T19:21:08.110000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:21:08.110000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316993, 34.13465]}, "properties": {"time": "2025-10-09T19:18:08.311000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:18:08.311000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316981, 34.134656]}, "properties": {"time": "2025-10-09T19:15:08.204000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:15:08.204000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316981, 34.134656]}, "properties": {"time": "2025-10-09T19:12:08.728000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:12:08.728000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316991, 34.134655]}, "properties": {"time": "2025-10-09T19:09:08.300000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:09:08.300000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316991, 34.134655]}, "properties": {"time": "2025-10-09T19:06:08.410000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:06:08.410000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316988, 34.134653]}, "properties": {"time": "2025-10-09T19:03:07.456000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:03:07.456000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316988, 34.134653]}, "properties": {"time": "2025-10-09T19:00:08.350000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 19:00:08.350000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316988, 34.134653]}, "properties": {"time": "2025-10-09T18:57:08.700000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:57:08.700000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316988, 34.134653]}, "properties": {"time": "2025-10-09T18:54:07.682000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:54:07.682000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316988, 34.134653]}, "properties": {"time": "2025-10-09T18:51:07.631000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:51:07.631000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317003, 34.134659]}, "properties": {"time": "2025-10-09T18:48:07.647000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:48:07.647000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317003, 34.134659]}, "properties": {"time": "2025-10-09T18:45:07.751000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:45:07.751000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317003, 34.134659]}, "properties": {"time": "2025-10-09T18:42:07.650000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:42:07.650000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317003, 34.134659]}, "properties": {"time": "2025-10-09T18:39:07.675000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:39:07.675000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317003, 34.134659]}, "properties": {"time": "2025-10-09T18:36:07.708000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:36:07.708000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317003, 34.134659]}, "properties": {"time": "2025-10-09T18:33:07.685000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:33:07.685000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316994, 34.134672]}, "properties": {"time": "2025-10-09T18:30:07.735000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:30:07.735000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316996, 34.134689]}, "properties": {"time": "2025-10-09T18:27:07.811000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:27:07.811000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316995, 34.134673]}, "properties": {"time": "2025-10-09T18:24:07.818000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:24:07.818000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316995, 34.134673]}, "properties": {"time": "2025-10-09T18:21:07.877000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:21:07.877000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.316995, 34.134673]}, "properties": {"time": "2025-10-09T18:18:07.752000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:18:07.752000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317542, 34.134771]}, "properties": {"time": "2025-10-09T18:15:07.799000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:15:07.799000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.317328, 34.134846]}, "properties": {"time": "2025-10-09T18:12:07.827000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:12:07.827000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315195, 34.134604]}, "properties": {"time": "2025-10-09T18:10:22.271000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:10:22.271000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315144, 34.132797]}, "properties": {"time": "2025-10-09T18:10:09.280000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:10:09.280000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315134, 34.130951]}, "properties": {"time": "2025-10-09T18:09:59.001000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:59.001000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.31512, 34.12912]}, "properties": {"time": "2025-10-09T18:09:49.155000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:49.155000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315104, 34.127199]}, "properties": {"time": "2025-10-09T18:09:38.808000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:38.808000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315088, 34.125268]}, "properties": {"time": "2025-10-09T18:09:28.632000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:28.632000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315073, 34.123446]}, "properties": {"time": "2025-10-09T18:09:18.359000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:18.359000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315061, 34.121534]}, "properties": {"time": "2025-10-09T18:09:08.186000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:08.186000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.315061, 34.120315]}, "properties": {"time": "2025-10-09T18:09:00.067000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:09:00.067000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.31504, 34.118386]}, "properties": {"time": "2025-10-09T18:08:50.324000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:08:50.324000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.314806, 34.116542]}, "properties": {"time": "2025-10-09T18:08:36.680000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:08:36.680000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.313638, 34.114932]}, "properties": {"time": "2025-10-09T18:08:24.821000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:08:24.821000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.311714, 34.113955]}, "properties": {"time": "2025-10-09T18:08:11.477000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:08:11.477000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.309514, 34.113576]}, "properties": {"time": "2025-10-09T18:08:00.333000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:08:00.333000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.307902, 34.112316]}, "properties": {"time": "2025-10-09T18:07:48.167000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:07:48.167000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.30693, 34.110568]}, "properties": {"time": "2025-10-09T18:07:35.854000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:07:35.854000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.305746, 34.10897]}, "properties": {"time": "2025-10-09T18:07:24.697000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:07:24.697000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.305173, 34.107084]}, "properties": {"time": "2025-10-09T18:07:14.647000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:07:14.647000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.30463, 34.105214]}, "properties": {"time": "2025-10-09T18:07:04.363000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:07:04.363000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.303773, 34.103549]}, "properties": {"time": "2025-10-09T18:06:55.212000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:55.212000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.303581, 34.101666]}, "properties": {"time": "2025-10-09T18:06:45.152000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:45.152000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.302659, 34.100016]}, "properties": {"time": "2025-10-09T18:06:35.963000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:35.963000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.301574, 34.098353]}, "properties": {"time": "2025-10-09T18:06:26.770000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:26.770000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.299896, 34.096917]}, "properties": {"time": "2025-10-09T18:06:16.620000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:16.620000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.29828, 34.095616]}, "properties": {"time": "2025-10-09T18:06:08.408000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:08.408000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.297887, 34.095366]}, "properties": {"time": "2025-10-09T18:06:06.292000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:06:06.292000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.295756, 34.094515]}, "properties": {"time": "2025-10-09T18:05:55.133000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:05:55.133000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.293626, 34.094105]}, "properties": {"time": "2025-10-09T18:05:44.985000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:05:44.985000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.291683, 34.093042]}, "properties": {"time": "2025-10-09T18:05:32.848000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:05:32.848000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.289437, 34.092977]}, "properties": {"time": "2025-10-09T18:05:17.665000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:05:17.665000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.287469, 34.093846]}, "properties": {"time": "2025-10-09T18:05:03.472000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:05:03.472000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.285238, 34.093586]}, "properties": {"time": "2025-10-09T18:04:50.290000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:04:50.290000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.283336, 34.094526]}, "properties": {"time": "2025-10-09T18:04:19.061000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:04:19.061000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.281906, 34.095898]}, "properties": {"time": "2025-10-09T18:03:43.870000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:03:43.870000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280084, 34.094775]}, "properties": {"time": "2025-10-09T18:03:07.485000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:03:07.485000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280498, 34.094682]}, "properties": {"time": "2025-10-09T18:00:07.501000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 18:00:07.501000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280503, 34.094756]}, "properties": {"time": "2025-10-09T17:57:07.579000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:57:07.579000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280546, 34.094792]}, "properties": {"time": "2025-10-09T17:54:07.786000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:54:07.786000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280544, 34.094877]}, "properties": {"time": "2025-10-09T17:51:07.995000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:51:07.995000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280533, 34.094815]}, "properties": {"time": "2025-10-09T17:48:07.976000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:48:07.976000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280535, 34.094815]}, "properties": {"time": "2025-10-09T17:45:07.950000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:45:07.950000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280539, 34.094718]}, "properties": {"time": "2025-10-09T17:42:08.072000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:42:08.072000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-116.280512, 34.094811]}, "properties": {"time": "2025-10-09T17:39:08.058000", "style": {"color": "blue"}, "icon": "circle", "popup": "Device 2 | 2025-10-09 17:39:08.058000"}}]}, {
+                    pointToLayer: function (feature, latLng) {
+                        if (feature.properties.icon == 'marker') {
+                            if(feature.properties.iconstyle){
+                                return new L.Marker(latLng, {
+                                    icon: L.icon(feature.properties.iconstyle)});
+                            }
+                            //else
+                            return new L.Marker(latLng);
+                        }
+                        if (feature.properties.icon == 'circle') {
+                            if (feature.properties.iconstyle) {
+                                return new L.circleMarker(latLng, feature.properties.iconstyle)
+                                };
+                            //else
+                            return new L.circleMarker(latLng);
+                        }
+                        //else
+
+                        return new L.Marker(latLng);
+                    },
+                    style: function (feature) {
+                        return feature.properties.style;
+                    },
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties.popup) {
+                        layer.bindPopup(feature.properties.popup);
+                        }
+                        if (feature.properties.tooltip) {
+                        layer.bindTooltip(feature.properties.tooltip);
+                        }
+                    }
+                })
+
+            var timestamped_geo_json_0b252dda27173cdef1a4084fc4f30c19 = L.timeDimension.layer.geoJson(
+                geoJsonLayer,
+                {
+                    updateTimeDimension: true,
+                    addlastPoint: true,
+                    duration: undefined,
+                }
+            ).addTo(map_3b315c751e8080e1e98d5e7057897a29);
+        
+    
+            L.Control.TimeDimensionCustom = L.Control.TimeDimension.extend({
+                _getDisplayDateFormat: function(date){
+                    var newdate = new moment(date);
+                    console.log(newdate)
+                    return newdate.format("YYYY-MM-DD HH:mm:ss");
+                }
+            });
+            map_3b315c751e8080e1e98d5e7057897a29.timeDimension = L.timeDimension(
+                {
+                    period: "PT5S",
+                }
+            );
+            var timeDimensionControl = new L.Control.TimeDimensionCustom(
+                {
+  "position": "bottomleft",
+  "minSpeed": 0.1,
+  "maxSpeed": 10,
+  "autoPlay": true,
+  "loopButton": false,
+  "timeSliderDragUpdate": false,
+  "speedSlider": true,
+  "playerOptions": {
+  "transitionTime": 200,
+  "loop": false,
+  "startOver": true,
+},
+}
+            );
+            map_3b315c751e8080e1e98d5e7057897a29.addControl(this.timeDimensionControl);
+
+            var geoJsonLayer = L.geoJson({"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-117.888002, 34.000722]}, "properties": {"time": "2025-10-09T19:36:46.811000", "style": {"color": "green"}, "icon": "circle", "popup": "Device 3 | 2025-10-09 19:36:46.811000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-117.888522, 34.006543]}, "properties": {"time": "2025-10-09T19:31:44.929000", "style": {"color": "green"}, "icon": "circle", "popup": "Device 3 | 2025-10-09 19:31:44.929000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-117.888501, 34.006528]}, "properties": {"time": "2025-10-09T19:22:38.381000", "style": {"color": "green"}, "icon": "circle", "popup": "Device 3 | 2025-10-09 19:22:38.381000"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-117.888501, 34.006528]}, "properties": {"time": "2025-10-09T19:22:37.373000", "style": {"color": "green"}, "icon": "circle", "popup": "Device 3 | 2025-10-09 19:22:37.373000"}}]}, {
+                    pointToLayer: function (feature, latLng) {
+                        if (feature.properties.icon == 'marker') {
+                            if(feature.properties.iconstyle){
+                                return new L.Marker(latLng, {
+                                    icon: L.icon(feature.properties.iconstyle)});
+                            }
+                            //else
+                            return new L.Marker(latLng);
+                        }
+                        if (feature.properties.icon == 'circle') {
+                            if (feature.properties.iconstyle) {
+                                return new L.circleMarker(latLng, feature.properties.iconstyle)
+                                };
+                            //else
+                            return new L.circleMarker(latLng);
+                        }
+                        //else
+
+                        return new L.Marker(latLng);
+                    },
+                    style: function (feature) {
+                        return feature.properties.style;
+                    },
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties.popup) {
+                        layer.bindPopup(feature.properties.popup);
+                        }
+                        if (feature.properties.tooltip) {
+                        layer.bindTooltip(feature.properties.tooltip);
+                        }
+                    }
+                })
+
+            var timestamped_geo_json_f3f2cbb2af6a732faa2554c926b2c3e4 = L.timeDimension.layer.geoJson(
+                geoJsonLayer,
+                {
+                    updateTimeDimension: true,
+                    addlastPoint: true,
+                    duration: undefined,
+                }
+            ).addTo(map_3b315c751e8080e1e98d5e7057897a29);
+        
+</script>
+</html>
