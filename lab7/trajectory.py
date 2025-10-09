@@ -12,22 +12,21 @@ auth = requests.post(
 token = auth.json()['token']
 headers = {"X-Authorization": f"Bearer {token}"}
 
-# --- 设备列表 ---
+# all device ids
 device_ids = [
     "ae0c6bc0-a4b9-11f0-bd90-73180dc3ced7",
     "8b9d0610-a4f2-11f0-9f61-39c42c8952cf",
     "4ee634a0-a4b9-11f0-bd90-73180dc3ced7"
 ]
 
-# --- 时间范围（过去 1 小时） ---
+# 10 hours ago
 end_ts = int(time.time() * 1000)
-start_ts = end_ts - 3600 * 2000  # 1 小时前
+start_ts = end_ts - 3600 * 10000  
 
-# --- 地图初始化 ---
+# map
 m = folium.Map(location=[37.7749, -122.4194], zoom_start=3)
 colors = ['red', 'blue', 'green']
 
-# --- 遍历设备 ---
 for i, device_id in enumerate(device_ids):
     url = f"http://3.134.109.104:8080/api/plugins/telemetry/DEVICE/{device_id}/values/timeseries"
     params = {"keys": "lat,lon", "startTs": start_ts, "endTs": end_ts}
@@ -40,7 +39,7 @@ for i, device_id in enumerate(device_ids):
     lats = data['lat']
     lons = data['lon']
 
-    # 构建 DataFrame
+    # build DataFrame
     df = pd.DataFrame({
         'lat': [float(v['value']) for v in lats],
         'lon': [float(v['value']) for v in lons],
@@ -49,7 +48,7 @@ for i, device_id in enumerate(device_ids):
     df['ts'] = pd.to_datetime(df['ts'], unit='ms').sort_values()
 
     if df.empty:
-        print(f"⚠️ Device {device_id} telemetry is empty after filtering.")
+        print(f"Device {device_id} telemetry is empty after filtering.")
         continue
 
     color = colors[i % len(colors)]
@@ -69,15 +68,15 @@ for i, device_id in enumerate(device_ids):
 
     TimestampedGeoJson(
         {'type': 'FeatureCollection', 'features': features},
-        period='PT5S',          # 每5秒一个点
+        period='PT5S',          # every 5 seconds
         add_last_point=True,
         auto_play=True,
         loop=False
     ).add_to(m)
 
-    print(f"✅ Added device {device_id} with {len(df)} history points")
+    print(f"Added device {device_id} with {len(df)} history points")
 
-# --- 保存地图 ---
+# save html
 m.save("multi_device_history.html")
-print("✅ Map saved as multi_device_history.html")
+print("Map saved as multi_device_history.html")
 
