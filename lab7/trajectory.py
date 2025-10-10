@@ -4,7 +4,7 @@ import folium
 from folium.plugins import TimestampedGeoJson
 import time
 
-# --- 登录，获取 token ---
+# access token
 auth = requests.post(
     "http://3.134.109.104:8080/api/auth/login",
     json={"username": "tenant@thingsboard.org", "password": "tenant"}
