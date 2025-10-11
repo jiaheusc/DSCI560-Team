@@ -4,7 +4,6 @@ import folium
 from folium.plugins import TimestampedGeoJson
 import time
 
-# access token
 auth = requests.post(
     "http://3.134.109.104:8080/api/auth/login",
     json={"username": "tenant@thingsboard.org", "password": "tenant"}
@@ -19,9 +18,9 @@ device_ids = [
     "4ee634a0-a4b9-11f0-bd90-73180dc3ced7"
 ]
 
-# 10 hours ago
+# 48 hours ago
 end_ts = int(time.time() * 1000)
-start_ts = end_ts - 3600 * 10000  
+start_ts = end_ts - 3600 * 480000  
 
 # map
 m = folium.Map(location=[37.7749, -122.4194], zoom_start=3)
