@@ -9,7 +9,8 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_har
 
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-
+from sklearn.metrics.pairwise import cosine_similarity
+import os
 POSTS_TABLE = "reddit_posts"
 
 # Which runs to process: "ALL" or list like ["dm50", "dbow100"]
@@ -158,6 +159,11 @@ def visualize_clusters_tsne(Xn, labels, run_name, k, random_state=42):
     print(f"t-SNE cluster visualization saved as {output_path}")
     plt.close()
 
+def analyze_space(X, name):
+    sim = cosine_similarity(X)
+    np.fill_diagonal(sim, 0)
+    print(f"{name}: mean={sim.mean():.3f}, std={sim.std():.3f}, max={sim.max():.3f}, min={sim.min():.3f}")
+
 def main():
 
     conn = mysql.connector.connect(
@@ -187,6 +193,7 @@ def main():
         out = df.copy()
         out["cluster"] = labels
         
+        analyze_space(Xn, rn)
         persist_assignments(conn, rn, out)
         visualize_clusters_tsne(Xn, labels, rn, metrics["k"], RANDOM_STATE)
         row = {

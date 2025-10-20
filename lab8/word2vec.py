@@ -11,6 +11,8 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import normalize
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+from sklearn.metrics.pairwise import cosine_similarity
+import os
 
 def visualize_clusters(embeddings, labels, output_path="reddit_clusters_plot.png"):
     print("Visualizing clusters with PCA...")
@@ -67,10 +69,10 @@ def load_data_from_mysql():
     db = mysql.connector.connect(
         host="localhost",
         user="root",
-        password="",
-        database="reddit_tech"
+        password = "",
+        database = "reddit_tech"
     )
-    query = "SELECT content FROM reddit_posts WHERE content IS NOT NULL;"
+    query = "SELECT CONCAT_WS(' ', title, content) AS content FROM reddit_posts WHERE content IS NOT NULL;"
     df = pd.read_sql(query, db)
     db.close()
     print(f"Loaded {len(df)} posts from MySQL database 'reddit_tech.reddit_posts'.")
@@ -130,6 +132,11 @@ def build_embeddings(posts, word_to_bin, k):
         labels.append(int(np.argmax(vec)))  # Dominant bin label for each post
     return np.array(vectors), labels
 
+def analyze_space(X):
+    sim = cosine_similarity(X)
+    np.fill_diagonal(sim, 0)
+    print(f"mean={sim.mean():.3f}, std={sim.std():.3f}, max={sim.max():.3f}, min={sim.min():.3f}")
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--k', type=int, default=3, help='Number of clusters / embedding dimension')
@@ -157,6 +164,7 @@ def main():
     print(f"Cluster labels saved to {args.labels}")
     print(f"Embedding shape: {reddit_vectors.shape}")
     
+    analyze_space(Xn)
     # visualize result using tsne and PCA
     # visualize_clusters(reddit_vectors, post_labels)
     visualize_clusters_tsne(Xn, post_labels, best_k, args.k)

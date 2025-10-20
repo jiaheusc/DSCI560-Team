@@ -3,7 +3,7 @@ from typing import List
 import pandas as pd
 import mysql.connector
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
-
+import os
 POSTS_TABLE = "reddit_posts"
 RUNS = ["dm50", "dm100", "dm200"]
 
@@ -11,7 +11,7 @@ RUNS = ["dm50", "dm100", "dm200"]
 RUN_CONFIGS = {
     "dm50": dict(dm=1, vector_size=50, window=5,  min_count=2, epochs=80, negative=10, sample=1e-4, workers=4, seed=42),
     "dm100": dict(dm=1, vector_size=100, window=5,  min_count=2, epochs=80, negative=10, sample=1e-4, workers=4, seed=42),
-    "dm200": dict(dm=1, vector_size=150, window=5,  min_count=3, epochs=80, negative=10, sample=1e-4, workers=4, seed=42)
+    "dm200": dict(dm=1, vector_size=200, window=5,  min_count=3, epochs=80, negative=10, sample=1e-4, workers=4, seed=42)
 }
 
 SAVE_MODEL_FILES = True  
