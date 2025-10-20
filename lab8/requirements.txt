@@ -5,3 +5,7 @@ mysql-connector-python
 scikit-learn
 matplotlib
 seaborn
+praw
+nltk
+pytesseract
+requests

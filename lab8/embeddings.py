@@ -9,9 +9,9 @@ RUNS = ["dm50", "dm100", "dm200"]
 
 # Doc2Vec settings for each run
 RUN_CONFIGS = {
-    "dm50":    dict(dm=1, vector_size=50,  window=5,  min_count=2, epochs=40, negative=5,  workers=4, seed=42),
-    "dm100": dict(dm=1, vector_size=100, window=8, min_count=2, epochs=45, negative=10, workers=4, seed=42),
-    "dm200":   dict(dm=1, vector_size=200, window=10, min_count=5, epochs=50, negative=10, workers=4, seed=42),
+    "dm50": dict(dm=1, vector_size=50, window=5,  min_count=2, epochs=80, negative=10, sample=1e-4, workers=4, seed=42),
+    "dm100": dict(dm=1, vector_size=100, window=5,  min_count=2, epochs=80, negative=10, sample=1e-4, workers=4, seed=42),
+    "dm200": dict(dm=1, vector_size=150, window=5,  min_count=3, epochs=80, negative=10, sample=1e-4, workers=4, seed=42)
 }
 
 SAVE_MODEL_FILES = True  

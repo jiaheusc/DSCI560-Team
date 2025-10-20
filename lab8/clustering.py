@@ -7,6 +7,8 @@ from sklearn.preprocessing import Normalizer
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
 
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 POSTS_TABLE = "reddit_posts"
 
@@ -14,7 +16,7 @@ POSTS_TABLE = "reddit_posts"
 RUNS = "ALL"
 
 K_MIN = 2
-K_MAX = 8
+K_MAX = 21
 RANDOM_STATE = 42
 
 
@@ -93,7 +95,7 @@ def cluster_and_score(df, kmin, kmax, random_state=42):
     else:
         sil = float("nan"); db = float("nan"); ch = float("nan")
 
-    return labels, dict(k=best_k, sil=float(sil), db=float(db), ch=float(ch))
+    return Xn, labels, dict(k=best_k, sil=float(sil), db=float(db), ch=float(ch))
 
 
 
@@ -117,6 +119,44 @@ def persist_assignments(conn, run_name, df_with_labels):
     conn.commit()
     cur.close()
 
+def visualize_clusters_tsne(Xn, labels, run_name, k, random_state=42):
+
+    output_path = f"doc2vec_plot_{run_name}_tsne.png"
+    print(f"Visualizing t-SNE doc2vec (k={k})")
+    
+    tsne = TSNE(
+        n_components=2, 
+        perplexity=30,
+        metric="cosine",
+        learning_rate='auto', 
+        init='pca',
+        early_exaggeration=12.0,
+        max_iter=1000,
+        random_state=random_state,
+    )
+    
+    reduced = tsne.fit_transform(Xn)
+
+    plt.figure(figsize=(12, 9))
+    scatter = plt.scatter(reduced[:, 0], reduced[:, 1], c=labels, cmap='tab10', s=20, alpha=0.7)
+    
+    plt.title(f"t-SNE Visualization for doc2vec'{run_name}' (k={k})")
+    plt.xlabel(f"t-SNE Component 1")
+    plt.ylabel(f"t-SNE Component 2")
+    
+    try:
+        if k <= 10:
+             handles, _ = scatter.legend_elements()
+             plt.legend(handles, [f"Cluster {i}" for i in range(k)], title="Clusters")
+        else:
+            plt.colorbar(scatter, label="Cluster ID")
+    except Exception:
+         plt.colorbar(scatter, label="Cluster ID")
+
+    plt.tight_layout()
+    plt.savefig(output_path)
+    print(f"t-SNE cluster visualization saved as {output_path}")
+    plt.close()
 
 def main():
 
@@ -143,12 +183,12 @@ def main():
             print("No rows for this run; skipping.")
             continue
 
-        labels, metrics = cluster_and_score(df, K_MIN, K_MAX, RANDOM_STATE)
+        Xn, labels, metrics = cluster_and_score(df, K_MIN, K_MAX, RANDOM_STATE)
         out = df.copy()
         out["cluster"] = labels
-
+        
         persist_assignments(conn, rn, out)
-
+        visualize_clusters_tsne(Xn, labels, rn, metrics["k"], RANDOM_STATE)
         row = {
             "run": rn,
             "k": int(metrics["k"]),
