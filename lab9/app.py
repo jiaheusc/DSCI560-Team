@@ -3,18 +3,19 @@ import io
 import hashlib
 from datetime import datetime
 from typing import List, Tuple, Optional
+
 import sys
 
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+from langchain.memory import ChatMessageHistory
 from langchain.chat_models import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.text_splitter import CharacterTextSplitter
+
+
 
 from htmlTemplates import css, bot_template, user_template
 import mysql.connector
@@ -31,10 +32,12 @@ CHUNK_OVERLAP = 100
 MYSQL_HOST = "localhost"
 MYSQL_PORT = 3306
 MYSQL_USER = "root"
-MYSQL_PASSWORD = "Zmh201130?"
+MYSQL_PASSWORD = "DSCI560&team"
 MYSQL_DB = "lab9"
 
-
+load_dotenv(dotenv_path=".env.txt")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+print(OPENAI_API_KEY)
 def get_pdf_text(pdf_docs):
     texts = []
     for f in pdf_docs:
@@ -69,20 +72,46 @@ def get_text_chunks(text: str) -> List[str]:
 
 
 def get_vectorstore(text_chunks: List[str]):
-    embeddings = OpenAIEmbeddings()
+    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
     return FAISS.from_texts(text_chunks, embeddings)
 
 
 def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI()
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
-        memory=memory,
-    )
-    return chain
+    # LLM
+    llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
 
+    # Use ChatMessageHistory instead of ConversationBufferMemory
+    memory = ChatMessageHistory()  # stores chat history
+
+    # Prompt template
+    prompt = ChatPromptTemplate.from_template("""
+You are a helpful assistant. Use the following context from retrieved documents
+to answer the user's question.
+
+Context:
+{context}
+
+Question:
+{input}
+""")
+
+    # Retriever
+    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+
+    # Document chain
+    doc_chain = create_stuff_documents_chain(llm, prompt)
+
+    # Create retrieval chain
+    retrieval_chain = RetrievalQA(
+        combine_documents_chain=doc_chain,
+        retriever=retriever,
+        return_source_documents=True
+    )
+
+    # Optionally attach memory manually in your chat loop
+    retrieval_chain.memory = memory
+
+    return retrieval_chain
 
 def handle_userinput(user_question: str):
     response = st.session_state.conversation({"question": user_question})
@@ -234,7 +263,6 @@ def _load_vectorstore_for_cli_openai():
 
 
 def main():
-    load_dotenv()
     st.set_page_config(page_title="Chat with PDFs", page_icon=":robot_face:")
     st.write(css, unsafe_allow_html=True)
 
