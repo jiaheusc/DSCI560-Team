@@ -67,11 +67,11 @@ def visualize_clusters_tsne(Xn, labels, k, run_name, random_state=42):
 def load_data_from_mysql():
 # Connect to MySQL and load reddit_posts
     db = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password = "",
-        database = "reddit_tech"
-    )
+    host = "localhost",
+    user = "root",
+    password = "DSCI560&team",
+    database = "reddit_tech"
+)
     query = "SELECT CONCAT_WS(' ', title, content) AS content FROM reddit_posts WHERE content IS NOT NULL;"
     df = pd.read_sql(query, db)
     db.close()

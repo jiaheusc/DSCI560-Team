@@ -1,0 +1,4 @@
+run,k,silhouette_cos,davies_bouldin,calinski_harabasz
+dm50,2,0.1209,3.7485,68.41
+dm100,2,0.0902,4.4736,47.66
+dm200,2,0.0768,4.9838,38.44
