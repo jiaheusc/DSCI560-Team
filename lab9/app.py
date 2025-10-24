@@ -3,17 +3,20 @@ import io
 import hashlib
 from datetime import datetime
 from typing import List, Tuple, Optional
-
+from pathlib import Path
 import sys
 
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-from langchain.memory import ChatMessageHistory
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter as CharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from operator import itemgetter
 
 
 
@@ -35,9 +38,18 @@ MYSQL_USER = "root"
 MYSQL_PASSWORD = "DSCI560&team"
 MYSQL_DB = "lab9"
 
-load_dotenv(dotenv_path=".env.txt")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-print(OPENAI_API_KEY)
+
+def _load_api_key_from_dotenv() -> Optional[str]:
+    from pathlib import Path
+    here = Path(__file__).parent
+    load_dotenv(dotenv_path=here / ".env", override=True)
+    load_dotenv(dotenv_path=here / ".env.txt", override=True)
+    key = os.getenv("OPENAI_API_KEY")
+    if key:
+        os.environ["OPENAI_API_KEY"] = key
+    return key
+
+
 def get_pdf_text(pdf_docs):
     texts = []
     for f in pdf_docs:
@@ -63,7 +75,6 @@ def get_pdf_text(pdf_docs):
 
 def get_text_chunks(text: str) -> List[str]:
     splitter = CharacterTextSplitter(
-        separator="\n",
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
         length_function=len,
@@ -71,54 +82,68 @@ def get_text_chunks(text: str) -> List[str]:
     return splitter.split_text(text)
 
 
+
 def get_vectorstore(text_chunks: List[str]):
-    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+    embeddings = OpenAIEmbeddings()
     return FAISS.from_texts(text_chunks, embeddings)
 
+STORE = {}
+def _get_session_history(session_id: str):
+    if session_id not in STORE:
+        STORE[session_id] = InMemoryChatMessageHistory()
+    return STORE[session_id]
+
+
+
+def _format_docs(docs):
+    return "\n\n".join(d.page_content for d in docs)
 
 def get_conversation_chain(vectorstore):
-    # LLM
-    llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI()
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-    # Use ChatMessageHistory instead of ConversationBufferMemory
-    memory = ChatMessageHistory()  # stores chat history
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant. Use the context to answer the question.\n"
+                   "<context>\n{context}\n</context>"),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}")
+    ])
 
-    # Prompt template
-    prompt = ChatPromptTemplate.from_template("""
-You are a helpful assistant. Use the following context from retrieved documents
-to answer the user's question.
+    rag = {
+        "context": retriever | _format_docs,
+        "input": itemgetter("input"),
+        "chat_history": itemgetter("chat_history"),
+    } | prompt | llm | StrOutputParser()
 
-Context:
-{context}
-
-Question:
-{input}
-""")
-
-    # Retriever
-    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4})
-
-    # Document chain
-    doc_chain = create_stuff_documents_chain(llm, prompt)
-
-    # Create retrieval chain
-    retrieval_chain = RetrievalQA(
-        combine_documents_chain=doc_chain,
-        retriever=retriever,
-        return_source_documents=True
+    return RunnableWithMessageHistory(
+        rag,
+        _get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+        output_messages_key=None,  # we already parse to a string
     )
 
-    # Optionally attach memory manually in your chat loop
-    retrieval_chain.memory = memory
-
-    return retrieval_chain
 
 def handle_userinput(user_question: str):
-    response = st.session_state.conversation({"question": user_question})
-    st.session_state.chat_history = response["chat_history"]
-    for msg in st.session_state.chat_history:
-        role = "🧑‍💻 You" if msg.type == "human" else "🤖 Bot"
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = "streamlit"
+
+    chain = st.session_state.conversation
+    answer = chain.invoke(
+        {"input": user_question},
+        config={"configurable": {"session_id": st.session_state.session_id}}
+    )  # this is a plain string
+
+    # Render full history
+    history = _get_session_history(st.session_state.session_id).messages
+    for msg in history:
+        role = "🧑‍💻 You" if getattr(msg, "type", "") == "human" else "🤖 Bot"
         st.markdown(f"**{role}:** {msg.content}")
+
+    # Also show the newest answer
+    if answer:
+        st.markdown(f"**🤖 Bot:** {answer}")
+
 
 
 
@@ -237,24 +262,19 @@ def _upsert_pdf_and_chunks(conn, filename: str, raw_bytes: bytes, text: str, num
 
 def run_cli_driver(vectorstore):
     chain = get_conversation_chain(vectorstore)
-    print("CLI mode (OpenAI). Ask questions about your PDFs. Type 'exit' to quit.")
+    session_id = "cli"
+    print("CLI mode (OpenAI). Type 'exit' to quit.")
     while True:
-        try:
-            q = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nBye.")
-            break
+        q = input("> ").strip()
         if q.lower() in {"exit", "quit"}:
-            print("Bye.")
             break
-        if not q:
-            continue
-        resp = chain({"question": q})
-        print(resp.get("answer") or resp)
+        ans = chain.invoke({"input": q}, config={"configurable": {"session_id": session_id}})
+        print(ans)
+
+
 
 
 def _load_vectorstore_for_cli_openai():
-
     index_dir = "./data/faiss_index"
     if not os.path.isdir(index_dir):
         return None
@@ -263,51 +283,53 @@ def _load_vectorstore_for_cli_openai():
 
 
 def main():
+    _load_api_key_from_dotenv()
     st.set_page_config(page_title="Chat with PDFs", page_icon=":robot_face:")
     st.write(css, unsafe_allow_html=True)
+
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("OPENAI_API_KEY not set. Add it to a .env next to app.py (or .env.txt).")
+        st.stop()
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = "streamlit"
 
-    st.header("Chat with PDFs :robot_face:")
+    st.header("Chat with PDFs:")
     user_question = st.text_input("Ask questions about your documents:")
-    if user_question:
+    if user_question and st.session_state.conversation:
         handle_userinput(user_question)
 
     with st.sidebar:
         st.subheader("Your documents")
         pdf_docs = st.file_uploader(
             "Upload your PDFs here and click on 'Process'",
+            type=["pdf"],
             accept_multiple_files=True
         )
         if st.button("Process"):
+            if not pdf_docs:
+                st.warning("Please upload at least one PDF.")
+                st.stop()
             with st.spinner("Processing"):
-
+                # 1) Extract all text (aggregate for vector store)
                 raw_text = get_pdf_text(pdf_docs)
-
-
+                # 2) Chunk
                 text_chunks = get_text_chunks(raw_text)
-
-
+                # 3) Build vector store + persist
                 vectorstore = get_vectorstore(text_chunks)
-
-
-                os.makedirs("./data", exist_ok=True)
-                vectorstore.save_local("./data/faiss_index")
-
+                os.makedirs(DATA_DIR, exist_ok=True)
+                vectorstore.save_local(VS_DIR)
+                # 4) Persist to MySQL per PDF
                 conn = _init_mysql()
                 for f in pdf_docs:
                     try:
-                        # read raw bytes for hashing/storage; reset pointer if needed
-                        try:
-                            f.seek(0)
-                        except Exception:
-                            pass
+                        try: f.seek(0)
+                        except Exception: pass
                         raw = f.read()
-
-                        # per-file text so DB knows which chunks belong to which PDF
                         reader = PdfReader(io.BytesIO(raw))
                         pages = len(reader.pages)
                         text_single = "\n".join(
@@ -315,23 +337,15 @@ def main():
                         ).strip()
                         if not text_single:
                             continue
-
                         chunks_single = get_text_chunks(text_single)
                         _upsert_pdf_and_chunks(conn, f.name, raw, text_single, pages, chunks_single)
                     finally:
-                        try:
-                            f.seek(0)
-                        except Exception:
-                            pass
-
-
+                        try: f.seek(0)
+                        except Exception: pass
+                # 5) Set conversation chain
                 st.session_state.conversation = get_conversation_chain(vectorstore)
-
-
-
+                st.session_state.chat_history = []
+            st.success(f"Done. FAISS saved to `{VS_DIR}` and data saved in MySQL.")
 
 if __name__ == "__main__":
-    if "--cli" in sys.argv:
-        run_cli_driver(_load_vectorstore_for_cli_openai())
-    else:
-        main()
+    main()
