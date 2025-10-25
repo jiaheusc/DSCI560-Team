@@ -1,2 +1,7 @@
-langchain==0.0.208 pydantic==1.10.10
 streamlit run app.py
+backend server start:
+uvicorn backend:app --reload --port 8000
+frontend server start:
+python3 -m http.server 5500
+address:
+http://127.0.0.1:5500/index.html

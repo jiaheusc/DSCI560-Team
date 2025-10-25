@@ -176,7 +176,7 @@ const fileList = document.getElementById('file-list');
 fileInput.addEventListener('change', (event) => {
     const files = event.target.files;
     if (!files.length) return;
-    console.log('用户选择的文件：', files);
+    console.log('user choose file', files);
     for (let file of files) {
         const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
         if (!isPDF) {

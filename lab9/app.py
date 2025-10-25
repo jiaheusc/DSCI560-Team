@@ -10,7 +10,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter as CharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -24,12 +25,12 @@ from htmlTemplates import css, bot_template, user_template
 import mysql.connector
 
 
-DATA_DIR = os.path.abspath("./data")
+DATA_DIR = os.path.abspath("./daton youra")
 VS_DIR = os.path.join(DATA_DIR, "faiss_index")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
-CHUNK_SIZE = 500
+CHUNK_SIZE = 300
 CHUNK_OVERLAP = 100
 
 MYSQL_HOST = "localhost"
@@ -84,7 +85,7 @@ def get_text_chunks(text: str) -> List[str]:
 
 
 def get_vectorstore(text_chunks: List[str]):
-    embeddings = OpenAIEmbeddings()
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L6-v2")
     return FAISS.from_texts(text_chunks, embeddings)
 
 STORE = {}
@@ -98,30 +99,26 @@ def _get_session_history(session_id: str):
 def _format_docs(docs):
     return "\n\n".join(d.page_content for d in docs)
 
+from langchain_core.runnables import RunnableLambda
+
 def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant. Use the context to answer the question.\n"
-                   "<context>\n{context}\n</context>"),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}")
-    ])
+    def query_func(inputs):
+        query = inputs["input"]
+        docs = retriever.invoke(query)
+        context = "\n\n".join(d.page_content for d in docs)
+        return f"Top relevant context:\n{context}"
 
-    rag = {
-        "context": retriever | _format_docs,
-        "input": itemgetter("input"),
-        "chat_history": itemgetter("chat_history"),
-    } | prompt | llm | StrOutputParser()
-
+    runnable = RunnableLambda(query_func)
     return RunnableWithMessageHistory(
-        rag,
+        runnable,
         _get_session_history,
         input_messages_key="input",
         history_messages_key="chat_history",
-        output_messages_key=None,  # we already parse to a string
+        output_messages_key=None,
     )
+
 
 
 def handle_userinput(user_question: str):
@@ -143,7 +140,6 @@ def handle_userinput(user_question: str):
     # Also show the newest answer
     if answer:
         st.markdown(f"**🤖 Bot:** {answer}")
-
 
 
 
@@ -278,18 +274,15 @@ def _load_vectorstore_for_cli_openai():
     index_dir = "./data/faiss_index"
     if not os.path.isdir(index_dir):
         return None
-    embeddings = OpenAIEmbeddings()
+    mbeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L6-v2")
     return FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
+
 
 
 def main():
     _load_api_key_from_dotenv()
     st.set_page_config(page_title="Chat with PDFs", page_icon=":robot_face:")
     st.write(css, unsafe_allow_html=True)
-
-    if not os.getenv("OPENAI_API_KEY"):
-        st.error("OPENAI_API_KEY not set. Add it to a .env next to app.py (or .env.txt).")
-        st.stop()
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
