@@ -1,6 +1,10 @@
 const MAX_FILE_SIZE = 10485760;
 
-let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+// Clear chat history on each reload
+window.addEventListener('load', () => {
+    localStorage.removeItem('chatHistory');
+});
+// let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
 let all_files = []
 let isUploading = false;
 

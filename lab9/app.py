@@ -10,7 +10,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter as CharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -18,9 +18,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from operator import itemgetter
-
-
-
 from htmlTemplates import css, bot_template, user_template
 import mysql.connector
 
@@ -30,7 +27,7 @@ VS_DIR = os.path.join(DATA_DIR, "faiss_index")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
-CHUNK_SIZE = 300
+CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 
 MYSQL_HOST = "localhost"

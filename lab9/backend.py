@@ -20,14 +20,14 @@ from app import (
     get_conversation_chain,
     _load_api_key_from_dotenv,
 )
-
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
+import shutil
 
 # Initialize FastAPI app
 app = FastAPI(title="Chat with PDF Backend")
 
-# CORS for frontend (http://localhost or similar)
+# CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow frontend to call this backend
@@ -41,33 +41,13 @@ conversation_chain = None
 session_id = "api"
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L6-v2")
 
-# Ensure FAISS + data folder exist
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(VS_DIR, exist_ok=True)
-
-_load_api_key_from_dotenv()
-
-
-# --- Utility: Load FAISS if exists ---
-def load_or_create_faiss():
-    if os.path.exists(VS_DIR):
-        try:
-            print(f"Loading existing FAISS index from {VS_DIR}")
-            return FAISS.load_local(VS_DIR, embeddings, allow_dangerous_deserialization=True)
-        except Exception as e:
-            print("FAISS load failed:", e)
-    print("Creating new FAISS index...")
-    return None
-
 
 # --- Routes ---
-
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Handle single PDF upload, process, and update FAISS + MySQL."""
+    """Handle single PDF upload, clear old FAISS, and rebuild new one."""
     contents = await file.read()
 
-    # Parse PDF text
     reader = PdfReader(io.BytesIO(contents))
     num_pages = len(reader.pages)
     text = "\n".join((reader.pages[i].extract_text() or "") for i in range(num_pages)).strip()
@@ -75,29 +55,27 @@ async def upload_file(file: UploadFile = File(...)):
     if not text:
         return {"status": "error", "message": "Could not extract text from PDF."}
 
-    # Split into chunks
+    if os.path.exists(VS_DIR):
+        print(f"Removing old FAISS index at {VS_DIR}")
+        shutil.rmtree(VS_DIR)
+    os.makedirs(VS_DIR, exist_ok=True)
+
     text_chunks = get_text_chunks(text)
-
-    # Load or create FAISS vector store
-    vectorstore = load_or_create_faiss()
-    if vectorstore:
-        # Add new text embeddings to existing FAISS
-        vectorstore.add_texts(text_chunks)
-    else:
-        vectorstore = get_vectorstore(text_chunks)
-
-    # Save updated FAISS
+    print(f"Creating new FAISS index with {len(text_chunks)} chunks...")
+    vectorstore = get_vectorstore(text_chunks)
     vectorstore.save_local(VS_DIR)
 
-    # Save to MySQL
     conn = _init_mysql()
     _upsert_pdf_and_chunks(conn, file.filename, contents, text, num_pages, text_chunks)
+    conn.close()
 
-    # Update global conversation chain
+    # --- Step 5: Refresh the conversation chain ---
     global conversation_chain
     conversation_chain = get_conversation_chain(vectorstore)
 
-    return {"status": "success", "message": f"{file.filename} processed successfully."}
+    return {"status": "success", "message": f"{file.filename} processed and indexed successfully."}
+
+
 
 
 class PromptRequest(BaseModel):
@@ -106,28 +84,34 @@ class PromptRequest(BaseModel):
 
 @app.post("/prompt-input")
 async def process_prompt(req: PromptRequest):
-    """Handle chat prompts and return answers."""
     global conversation_chain
-    if conversation_chain is None:
-        # Load FAISS from disk
-        vectorstore = load_or_create_faiss()
-        if vectorstore is None:
-            return {"answer": "No documents indexed yet. Please upload a PDF first."}
-        conversation_chain = get_conversation_chain(vectorstore)
 
-    # Run retrieval + response
+    # Always reload FAISS before answering
+    try:
+        vectorstore = FAISS.load_local(VS_DIR, embeddings, allow_dangerous_deserialization=True)
+    except Exception as e:
+        return {"answer": f"Error loading FAISS index: {e}"}
+
+    # Refresh conversation chain each time
+    conversation_chain = get_conversation_chain(vectorstore)
+
+    # Generate answer
     answer = conversation_chain.invoke(
         {"input": req.prompt},
         config={"configurable": {"session_id": session_id}},
     )
 
-    return {"answer": answer}
+    if isinstance(answer, dict) and "output_text" in answer:
+        answer = answer["output_text"]
+    elif not isinstance(answer, str):
+        answer = str(answer)
+
+    return {"answer": answer.strip()}
+
 
 
 @app.get("/")
 def root():
     return {"message": "PDF QA backend running. Use /upload and /prompt-input."}
 
-
-# --- Run with: uvicorn backend:app --reload ---
 
