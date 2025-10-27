@@ -20,7 +20,7 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 from operator import itemgetter
 from htmlTemplates import css, bot_template, user_template
 import mysql.connector
-
+from pathlib import Path
 
 DATA_DIR = os.path.abspath("./daton youra")
 VS_DIR = os.path.join(DATA_DIR, "faiss_index")
@@ -38,7 +38,6 @@ MYSQL_DB = "lab9"
 
 
 def _load_api_key_from_dotenv() -> Optional[str]:
-    from pathlib import Path
     here = Path(__file__).parent
     load_dotenv(dotenv_path=here / ".env", override=True)
     load_dotenv(dotenv_path=here / ".env.txt", override=True)
@@ -274,68 +273,3 @@ def _load_vectorstore_for_cli_openai():
     mbeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L6-v2")
     return FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
 
-
-
-def main():
-    _load_api_key_from_dotenv()
-    st.set_page_config(page_title="Chat with PDFs", page_icon=":robot_face:")
-    st.write(css, unsafe_allow_html=True)
-
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = None
-    if "session_id" not in st.session_state:
-        st.session_state.session_id = "streamlit"
-
-    st.header("Chat with PDFs:")
-    user_question = st.text_input("Ask questions about your documents:")
-    if user_question and st.session_state.conversation:
-        handle_userinput(user_question)
-
-    with st.sidebar:
-        st.subheader("Your documents")
-        pdf_docs = st.file_uploader(
-            "Upload your PDFs here and click on 'Process'",
-            type=["pdf"],
-            accept_multiple_files=True
-        )
-        if st.button("Process"):
-            if not pdf_docs:
-                st.warning("Please upload at least one PDF.")
-                st.stop()
-            with st.spinner("Processing"):
-                # 1) Extract all text (aggregate for vector store)
-                raw_text = get_pdf_text(pdf_docs)
-                # 2) Chunk
-                text_chunks = get_text_chunks(raw_text)
-                # 3) Build vector store + persist
-                vectorstore = get_vectorstore(text_chunks)
-                os.makedirs(DATA_DIR, exist_ok=True)
-                vectorstore.save_local(VS_DIR)
-                # 4) Persist to MySQL per PDF
-                conn = _init_mysql()
-                for f in pdf_docs:
-                    try:
-                        try: f.seek(0)
-                        except Exception: pass
-                        raw = f.read()
-                        reader = PdfReader(io.BytesIO(raw))
-                        pages = len(reader.pages)
-                        text_single = "\n".join(
-                            (reader.pages[i].extract_text() or "") for i in range(pages)
-                        ).strip()
-                        if not text_single:
-                            continue
-                        chunks_single = get_text_chunks(text_single)
-                        _upsert_pdf_and_chunks(conn, f.name, raw, text_single, pages, chunks_single)
-                    finally:
-                        try: f.seek(0)
-                        except Exception: pass
-                # 5) Set conversation chain
-                st.session_state.conversation = get_conversation_chain(vectorstore)
-                st.session_state.chat_history = []
-            st.success(f"Done. FAISS saved to `{VS_DIR}` and data saved in MySQL.")
-
-if __name__ == "__main__":
-    main()

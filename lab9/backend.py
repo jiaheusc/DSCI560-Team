@@ -17,20 +17,19 @@ from app import (
     _upsert_pdf_and_chunks,
     VS_DIR,
     DATA_DIR,
-    get_conversation_chain,
-    _load_api_key_from_dotenv,
+    get_conversation_chain
 )
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 import shutil
-
+global conversation_chain
 # Initialize FastAPI app
 app = FastAPI(title="Chat with PDF Backend")
 
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow frontend to call this backend
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,14 +68,10 @@ async def upload_file(file: UploadFile = File(...)):
     _upsert_pdf_and_chunks(conn, file.filename, contents, text, num_pages, text_chunks)
     conn.close()
 
-    # --- Step 5: Refresh the conversation chain ---
     global conversation_chain
     conversation_chain = get_conversation_chain(vectorstore)
 
     return {"status": "success", "message": f"{file.filename} processed and indexed successfully."}
-
-
-
 
 class PromptRequest(BaseModel):
     prompt: str
@@ -84,15 +79,10 @@ class PromptRequest(BaseModel):
 
 @app.post("/prompt-input")
 async def process_prompt(req: PromptRequest):
-    global conversation_chain
-
-    # Always reload FAISS before answering
     try:
         vectorstore = FAISS.load_local(VS_DIR, embeddings, allow_dangerous_deserialization=True)
     except Exception as e:
         return {"answer": f"Error loading FAISS index: {e}"}
-
-    # Refresh conversation chain each time
     conversation_chain = get_conversation_chain(vectorstore)
 
     # Generate answer
