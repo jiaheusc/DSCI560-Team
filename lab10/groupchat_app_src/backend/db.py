@@ -1,0 +1,64 @@
+import os
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, func, UniqueConstraint
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://chatuser:chatpass@localhost:3306/groupchat")
+
+class Base(DeclarativeBase):
+    pass
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    prefer_name: Mapped[str | None] = mapped_column(String(50))
+    basic_info: Mapped[str | None] = mapped_column(Text(), nullable=True, default=None)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    messages: Mapped[list["Message"]] = relationship("Message", back_populates="user")
+    memberships: Mapped[list["ChatGroupUsers"]] = relationship("ChatGroupUsers", back_populates="user")
+
+class ChatGroups(Base):
+    __tablename__ = "chat_groups"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    group_name: Mapped[str] = mapped_column(String(50))
+    is_active: Mapped[bool] = mapped_column(Boolean(), default=False)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    memberships: Mapped[list["ChatGroupUsers"]] = relationship("ChatGroupUsers", back_populates="group", cascade="all, delete-orphan")
+    messages: Mapped[list["Message"]] = relationship("Message", back_populates="group", cascade="all, delete-orphan")
+
+class ChatGroupUsers(Base):
+    __tablename__ = "chat_group_users"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("chat_groups.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    is_active: Mapped[bool] = mapped_column(Boolean(), default=False)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    group: Mapped["ChatGroups"] = relationship("ChatGroups", back_populates="memberships")
+    user: Mapped["User"] = relationship("User", back_populates="memberships")
+    __table_args__ = (
+        UniqueConstraint("group_id", "user_id", name="uk_group_user"),
+    )
+
+class Message(Base):
+    __tablename__ = "messages"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("chat_groups.id", ondelete="CASCADE"), nullable=False)
+    content: Mapped[str] = mapped_column(Text())
+    is_bot: Mapped[bool] = mapped_column(Boolean(), default=False)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user = relationship("User", back_populates="messages")
+    group: Mapped["ChatGroups"] = relationship("ChatGroups", back_populates="messages")
+
+engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
