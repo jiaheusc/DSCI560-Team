@@ -132,25 +132,26 @@ async def broadcast_message(session: AsyncSession, msg: Message, group_id: int):
     
 async def maybe_answer_with_llm(session: AsyncSession, content: str, group_id: int):
     # naive heuristic: reply if the message contains a question mark
-    if "?" not in content:
-        return
-    system_prompt = (
-        "You are a helpful assistant participating in a small group chat. "
-        "Provide concise, accurate answers suitable for a shared chat context. "
-        "Cite facts succinctly when helpful and avoid extremely long messages."
-    )
-    try:
-        reply_text = await chat_completion([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content}
-        ])
-    except Exception as e:
-        reply_text = f"(LLM error) {e}"
-    bot_msg = Message(user_id=None, content=encrypt(reply_text), is_bot=True, group_id=group_id)
-    session.add(bot_msg)
-    await session.commit()
-    await session.refresh(bot_msg)
-    await broadcast_message(session, bot_msg, group_id)
+    # if "?" not in content:
+    #     return
+    # system_prompt = (
+    #     "You are a helpful assistant participating in a small group chat. "
+    #     "Provide concise, accurate answers suitable for a shared chat context. "
+    #     "Cite facts succinctly when helpful and avoid extremely long messages."
+    # )
+    # try:
+    #     reply_text = await chat_completion([
+    #         {"role": "system", "content": system_prompt},
+    #         {"role": "user", "content": content}
+    #     ])
+    # except Exception as e:
+    #     reply_text = f"(LLM error) {e}"
+    # bot_msg = Message(user_id=None, content=encrypt(reply_text), is_bot=True, group_id=group_id)
+    # session.add(bot_msg)
+    # await session.commit()
+    # await session.refresh(bot_msg)
+    # await broadcast_message(session, bot_msg, group_id)
+    return
 
 # --------- Routes ---------
 @app.on_event("startup")
@@ -376,5 +377,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), sess
     except WebSocketDisconnect:
         await manager.disconnect(user_id)
 
+from db import Questionnaires
+
+@app.post("/api/questionnaire")
+async def post_questionnaire(data: dict, username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    q = Questionnaires(content=data["content"])
+    session.add(q)
+    await session.commit()
+    return {"ok": True}
 # Serve frontend
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="static")
