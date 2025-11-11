@@ -9,7 +9,6 @@
 <body>
 <div class="container">
 
-    <!-- ① 登录页（原样保留） -->
     <div class="auth" id="auth">
         <h1>Group Chat</h1>
         <p>Create an account or log in to join the chat.</p>
@@ -25,7 +24,6 @@
         <div id="authMsg" class="msg"></div>
     </div>
 
-    <!-- ② 新增：问卷页 -->
     <div class="hidden" id="questionnaire">
         <h2>Questionnaire</h2>
         <p>Please fill out this brief survey before joining a group.</p>
@@ -35,7 +33,6 @@
         </div>
     </div>
 
-    <!-- ③ 新增：群组选择页 -->
     <div class="hidden" id="groupSelect">
         <h2>Select a Group</h2>
         <div id="groupList"></div>
@@ -48,7 +45,6 @@
         </div>
     </div>
 
-    <!-- ④ 群聊页（原样保留） -->
     <div class="chat hidden" id="chat">
         <div class="header">
             <h2>Group Chat</h2>
@@ -63,10 +59,7 @@
 
 </div>
 
-<!-- 原app.js（不改） -->
 <script src="app.js"></script>
 
-<!-- 新增问卷和群组逻辑 -->
-<script src="flow.js"></script>
 </body>
 </html>
