@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, func, UniqueConstraint
 from dotenv import load_dotenv
-
+from sqlalchemy import JSON
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://chatuser:chatpass@localhost:3306/groupchat")
@@ -55,6 +55,14 @@ class Message(Base):
     created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
     user = relationship("User", back_populates="messages")
     group: Mapped["ChatGroups"] = relationship("ChatGroups", back_populates="messages")
+
+class Questionnaires(Base):
+    __tablename__ = "questionnaires"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    content: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 
 engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
