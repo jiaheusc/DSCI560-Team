@@ -6,16 +6,17 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, Enum
 from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
 
 from cryptography.fernet import Fernet
 
-from db import SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers
-from auth import get_password_hash, verify_password, create_access_token, get_current_user_token
+from db import SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers, Questionnaires, UserRole
+from auth import get_password_hash, verify_password, create_access_token, get_current_user_token, verify_websocket_token
 from websocket_manager import ConnectionManager
 from llm import chat_completion
+import enum
 
 ENCRYPTION_KEY = os.environ.get("MY_APP_SECRET_KEY")
 if not ENCRYPTION_KEY:
@@ -47,25 +48,25 @@ def encrypt(text):
 def decrypt(token):
     return cipher_suite.decrypt(token.encode()).decode()
 
-# manager = ConnectionManager()
+
 class UserConnectionManager:
-    """按 user_id 管理连接"""
+
     def __init__(self):
-        # 格式: {user_id: WebSocket}
+
         self.active_users: dict[int, WebSocket] = {}
 
     async def connect(self, websocket: WebSocket, user_id: int):
         await websocket.accept()
-        # 存储 user_id -> websocket 的映射
+
         self.active_users[user_id] = websocket
 
     def disconnect(self, websocket: WebSocket, user_id: int):
-        # 从字典中移除
+
         if user_id in self.active_users:
             del self.active_users[user_id]
 
     async def send_to_user(self, user_id: int, message: dict):
-        """按 user_id 发送 JSON 消息"""
+
         websocket = self.active_users.get(user_id)
         if websocket:
             await websocket.send_json(message)
@@ -73,6 +74,11 @@ class UserConnectionManager:
 manager = UserConnectionManager()
 
 # --------- Schemas ---------
+class TokenData(BaseModel):
+    username: str
+    role: str
+    user_id: int
+
 class AuthPayload(BaseModel):
     username: str
     password: str
@@ -84,6 +90,7 @@ class MessagePayload(BaseModel):
 
 class ChatGroupCreate(BaseModel):
     group_name: Optional[str] = "new group"
+    usernames: List[str]
 
 class ChatGroupUpdate(BaseModel):
     group_name: str
@@ -97,7 +104,7 @@ class ChatGroupResponse(BaseModel):
     is_active: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --------- Dependencies ---------
 async def get_db() -> AsyncSession:
@@ -129,28 +136,29 @@ async def broadcast_message(session: AsyncSession, msg: Message, group_id: int):
     member_ids = result.scalars().all()
     for user_id in member_ids:
         await manager.send_to_user(user_id, payload)
-    
+
+# llm answer question
 async def maybe_answer_with_llm(session: AsyncSession, content: str, group_id: int):
     # naive heuristic: reply if the message contains a question mark
-    # if "?" not in content:
-    #     return
-    # system_prompt = (
-    #     "You are a helpful assistant participating in a small group chat. "
-    #     "Provide concise, accurate answers suitable for a shared chat context. "
-    #     "Cite facts succinctly when helpful and avoid extremely long messages."
-    # )
-    # try:
-    #     reply_text = await chat_completion([
-    #         {"role": "system", "content": system_prompt},
-    #         {"role": "user", "content": content}
-    #     ])
-    # except Exception as e:
-    #     reply_text = f"(LLM error) {e}"
-    # bot_msg = Message(user_id=None, content=encrypt(reply_text), is_bot=True, group_id=group_id)
-    # session.add(bot_msg)
-    # await session.commit()
-    # await session.refresh(bot_msg)
-    # await broadcast_message(session, bot_msg, group_id)
+    if "?" not in content:
+        return
+    system_prompt = (
+        "You are a helpful assistant participating in a small group chat. "
+        "Provide concise, accurate answers suitable for a shared chat context. "
+        "Cite facts succinctly when helpful and avoid extremely long messages."
+    )
+    try:
+        reply_text = await chat_completion([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content}
+        ])
+    except Exception as e:
+        reply_text = f"(LLM error) {e}"
+    bot_msg = Message(user_id=None, content=encrypt(reply_text), is_bot=True, group_id=group_id)
+    session.add(bot_msg)
+    await session.commit()
+    await session.refresh(bot_msg)
+    await broadcast_message(session, bot_msg, group_id)
     return
 
 # --------- Routes ---------
@@ -158,6 +166,7 @@ async def maybe_answer_with_llm(session: AsyncSession, content: str, group_id: i
 async def on_startup():
     await init_db()
 
+# normal user signup
 @app.post("/api/signup")
 async def signup(payload: AuthPayload, session: AsyncSession = Depends(get_db)):
     # check unique username
@@ -168,33 +177,89 @@ async def signup(payload: AuthPayload, session: AsyncSession = Depends(get_db)):
         username=payload.username, 
         password_hash=get_password_hash(payload.password),
         prefer_name=payload.prefer_name,
+        user_role=UserRole.user,
         basic_info=None
     )
     session.add(u)
     await session.commit()
-    token = create_access_token({"sub": u.username})
-    print(f"token: {token}")
+    await session.refresh(u)
+    print(f"user role: {u.user_role.value}")
+    token = create_access_token({"username": u.username, "role": u.user_role.value, "user_id": u.id})
     return {"ok": True, "token": token}
 
+# therapist signup
+# only operator can create therapist account
+@app.post("/api/create_therapist")
+async def create_therapist(payload: AuthPayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    
+    # check is operator
+    res = await session.execute(select(User).where(User.username == token_data.username))
+    u = res.scalar_one_or_none()
+    if u.user_role != UserRole.operator:
+        raise HTTPException(status_code=403, detail="Only operator can create therapist accounts")
+
+    # create therapist account
+    existing = await session.execute(select(User).where(User.username == payload.username))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    therapist = User(
+        username=payload.username,
+        password_hash=get_password_hash(payload.password),
+        prefer_name=payload.prefer_name,
+        user_role=UserRole.therapist,
+        basic_info=None
+    )
+    session.add(therapist)
+    await session.commit()
+    await session.refresh(therapist)
+    token = create_access_token({"username": therapist.username, "role": therapist.user_role.value, "user_id": therapist.id})
+    return {"ok": True, "token": token}
+
+# only for inside use
+# @app.post("/api/operator/signup")
+# async def signup(payload: AuthPayload, session: AsyncSession = Depends(get_db)):
+#     # check unique username
+#     existing = await session.execute(select(User).where(User.username == payload.username))
+#     if existing.scalar_one_or_none():
+#         raise HTTPException(status_code=400, detail="Username already taken")
+#     operator = User(
+#         username=payload.username, 
+#         password_hash=get_password_hash(payload.password),
+#         user_role=UserRole.operator,
+#         prefer_name=payload.prefer_name,
+#         basic_info=None
+#     )
+#     session.add(operator)
+#     await session.commit()
+#     await session.refresh(operator)
+#     token = create_access_token({"username": operator.username, "role": operator.user_role.value, "user_id": operator.id})
+#     return {"ok": True, "token": token}
+
+# all user login
 @app.post("/api/login")
 async def login(payload: AuthPayload, session: AsyncSession = Depends(get_db)):
     res = await session.execute(select(User).where(User.username == payload.username))
     u = res.scalar_one_or_none()
     if not u or not verify_password(payload.password, u.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token({"sub": u.username})
+    token = create_access_token({"username": u.username, "role": u.user_role.value, "user_id": u.id})
     return {"ok": True, "token": token}
 
-# 发信息
+# get all message in a group
+# /api/messages?group_id=***
 @app.get("/api/messages")
 async def get_messages(group_id: int, limit: int = 50, session: AsyncSession = Depends(get_db)):
-    res = await session.execute(select(Message).where(Message.group_id == group_id).order_by(desc(Message.created_at)).limit(limit))
+    res = await session.execute(select(Message)
+                                .where(Message.group_id == group_id)
+                                .order_by(desc(Message.created_at), desc(Message.id))
+                                .limit(limit))
     items = list(reversed(res.scalars().all()))
     out = []
     
     for m in items:
         username = None
-        #解密
+
         content_to_send = decrypt(m.content)
         if not m.is_bot and m.user_id:
             u = await session.get(User, m.user_id)
@@ -208,26 +273,23 @@ async def get_messages(group_id: int, limit: int = 50, session: AsyncSession = D
         })
     return {"messages": out}
 
-# 收信息
+# user post a message in the group
 @app.post("/api/messages")
-async def post_message(payload: MessagePayload, username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    res = await session.execute(select(User).where(User.username == username))
-    u = res.scalar_one_or_none()
-    if not u:
-        raise HTTPException(status_code=401, detail="Invalid user")
+async def post_message(payload: MessagePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+
     # check if group member
     group_id = payload.group_id
     check_stmt = select(ChatGroupUsers).where(
         ChatGroupUsers.group_id == group_id,
-        ChatGroupUsers.user_id == u.id,
+        ChatGroupUsers.user_id == token_data.user_id,
         ChatGroupUsers.is_active == True
     )
     if not (await session.execute(check_stmt)).scalar_one_or_none():
         raise HTTPException(status_code=403, detail="You are not a member of this group")
     
-    #加密
+
     content_to_save = encrypt(payload.content)
-    m = Message(user_id=u.id, content=content_to_save, is_bot=False, group_id=group_id)
+    m = Message(user_id=token_data.user_id, content=content_to_save, is_bot=False, group_id=group_id)
     session.add(m)
     await session.commit()
     await session.refresh(m)
@@ -236,13 +298,24 @@ async def post_message(payload: MessagePayload, username: str = Depends(get_curr
     asyncio.create_task(maybe_answer_with_llm(session, payload.content, group_id))
     return {"ok": True, "id": m.id}
 
-# 创建新组 并把创建者加入群组 （可改成传入一个array 然后创建群组后把人全部加进去）
+
+# create chat group
 @app.post("/api/chat-groups")
-async def create_chat_group(payload: ChatGroupCreate, username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    res = await session.execute(select(User).where(User.username == username))
-    current_user = res.scalar_one_or_none()
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Invalid user")
+async def create_chat_group(payload: ChatGroupCreate, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    
+    if not payload.usernames:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create a group with no members")
+    
+    stmt = select(User).where(User.username.in_(payload.usernames))
+    res = await session.execute(stmt)
+    users_to_add = res.scalars().all()
+
+    if len(users_to_add) != len(payload.usernames):
+        found_usernames = {u.username for u in users_to_add}
+        missing = [name for name in payload.usernames if name not in found_usernames]
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Users not found: {', '.join(missing)}")
     
     # create new group
     new_group = ChatGroups(
@@ -252,30 +325,36 @@ async def create_chat_group(payload: ChatGroupCreate, username: str = Depends(ge
     session.add(new_group)
     await session.flush()
 
+    # 是否把therapist也加进组里？
+
     # add member into the group
-    first_member = ChatGroupUsers(
-        group_id=new_group.id,
-        user_id=current_user.id,
-        is_active=True
-    )
-    session.add(first_member)
+    members_to_add = []
+    for user in users_to_add:
+        member = ChatGroupUsers(
+            group_id=new_group.id,
+            user_id=user.id,
+            is_active=True
+        )
+        members_to_add.append(member)
+
+    session.add_all(members_to_add)
     await session.commit()
     await session.refresh(new_group)
 
-    return {"new_group": new_group}
+    return new_group
 
-# 找一个user所在的所有组名
+# list all groups with group name
 @app.get("/api/chat-groups", response_model=List[ChatGroupResponse])
-async def get_user_groups(username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    res = await session.execute(select(User).where(User.username == username))
-    user = res.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid user")
+async def get_user_groups(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    # res = await session.execute(select(User).where(User.username == token_data.username))
+    # user = res.scalar_one_or_none()
+    # if not user:
+    #     raise HTTPException(status_code=401, detail="Invalid user")
     
     stmt = (
         select(ChatGroups)
         .join(ChatGroupUsers, ChatGroupUsers.group_id == ChatGroups.id)
-        .where(ChatGroupUsers.user_id == user.id, ChatGroupUsers.is_active == True)
+        .where(ChatGroupUsers.user_id == token_data.user_id, ChatGroupUsers.is_active == True)
         .order_by(ChatGroups.group_name)
     )
     # might need to change to order by last modified time
@@ -283,13 +362,12 @@ async def get_user_groups(username: str = Depends(get_current_user_token), sessi
     groups = result.scalars().all()
     return groups
 
-
-
-    
-# 为一个组添加user
+# add a user into a exist group
+# 加新人是therapist加还是用户加？
+# 改改改改改改改改改改改改改改改改改改改改改改改改
 @app.post("/api/chat-groups/{group_id}/members")
-async def add_member_to_group(group_id: int, payload: MemberAdd, username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    res = await session.execute(select(User).where(User.username == username))
+async def add_member_to_group(group_id: int, payload: MemberAdd, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    res = await session.execute(select(User).where(User.username == token_data.username))
     current_user = res.scalar_one_or_none()
     if not current_user:
         raise HTTPException(status_code=401, detail="Invalid operator")
@@ -297,7 +375,7 @@ async def add_member_to_group(group_id: int, payload: MemberAdd, username: str =
     # if are therapist check the role
     check_stmt = select(ChatGroupUsers).where(
         ChatGroupUsers.group_id == group_id,
-        ChatGroupUsers.user_id == current_user.id
+        ChatGroupUsers.user_id == token_data.user_id
     )
     if not (await session.execute(check_stmt)).scalar_one_or_none():
         raise HTTPException(status_code=403, detail="You are not a member of this group")
@@ -324,26 +402,21 @@ async def add_member_to_group(group_id: int, payload: MemberAdd, username: str =
     await session.commit()
     return {"ok": True, "message": f"User {payload.username} added to group {group_id}"}
 
-# 修改群名
+# modify group name
 @app.post("/api/chat-groups/{group_id}")
-async def update_group_name(group_id: int, payload: ChatGroupUpdate, username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+async def update_group_name(group_id: int, payload: ChatGroupUpdate, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
     group = await session.get(ChatGroups, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     
-    res = await session.execute(select(User).where(User.username == username))
-    current_user = res.scalar_one_or_none()
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Invalid operator")
-    
     check_stmt = select(ChatGroupUsers).where(
         ChatGroupUsers.group_id == group_id,
-        ChatGroupUsers.user_id == current_user.id
+        ChatGroupUsers.user_id == token_data.user_id
     )
     if not (await session.execute(check_stmt)).scalar_one_or_none():
         raise HTTPException(status_code=403, detail="You are not a member of this group")
 
-    # 4. 更新群名
+
     group.group_name = payload.group_name
     session.add(group)
     await session.commit()
@@ -351,39 +424,68 @@ async def update_group_name(group_id: int, payload: ChatGroupUpdate, username: s
     
     return group
 
+# create a questionnaire
+@app.post("/api/questionnaire")
+async def post_questionnaire(data: dict, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.operator:
+        raise HTTPException(status_code=403, detail="Only operator able to create questionnaire")
+
+    q = Questionnaires(content=data["content"])
+    session.add(q)
+    await session.commit()
+    return {"ok": True}
+
+# get questionnaire
+@app.get("/api/questionnaire")
+async def post_questionnaire(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    res = await session.execute(select(Questionnaires).order_by(Questionnaires.updated_at.desc()).limit(1))
+    latest_questionnaire = res.scalar_one_or_none()
+    if not latest_questionnaire:
+        raise HTTPException(status_code=404, detail="No questionnaire found")
+    return latest_questionnaire
+
+# save user questionnaire into db
+# parameter是json形式 直接给embedding
+# @app.post("/api/questionnaire")
+# async def post_questionnaire(data: dict, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    # check member?
+# token_data里有 user_id, username, role
+
+
+    
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), session: AsyncSession = Depends(get_db)):
-    await websocket.accept()
+    user_id = None
+    
     try:
-        username = Depends(get_current_user_token)
-        res = await session.execute(select(User).where(User.username == username))
-        user = res.scalar_one_or_none()
-        if not user:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        token_data = verify_websocket_token(token)
+        
+        if not token_data:
+            await websocket.accept() 
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
             return
+
+        user_id = token_data.user_id
+
     except Exception as e:
-        print(f"WS auth failed: {e}")
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        print(f"WS auth failed during token check: {e}")
+        await websocket.accept() 
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Auth error")
         return
     
-    user_id = user.id
-
-    await manager.connect(websocket, user_id)
+    await manager.connect(websocket, user_id) 
 
     try:
         while True:
             data = await websocket.receive_text()
 
     except WebSocketDisconnect:
-        await manager.disconnect(user_id)
+        print(f"User {user_id} disconnected")
+        await manager.disconnect(websocket, user_id) 
+    except Exception as e:
+        print(f"WS Error for {user_id}: {e}")
+        await manager.disconnect(websocket, user_id)
 
-from db import Questionnaires
-
-@app.post("/api/questionnaire")
-async def post_questionnaire(data: dict, username: str = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    q = Questionnaires(content=data["content"])
-    session.add(q)
-    await session.commit()
-    return {"ok": True}
 # Serve frontend
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="static")

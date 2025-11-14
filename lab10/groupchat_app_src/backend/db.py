@@ -2,12 +2,19 @@ import os
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, func, UniqueConstraint
+from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, func, UniqueConstraint, Enum
 from dotenv import load_dotenv
 from sqlalchemy import JSON
+import enum
+
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+asyncmy://chatuser:chatpass@localhost:3306/groupchat")
+
+class UserRole(str, enum.Enum):
+    user = "user"
+    therapist = "therapist"
+    operator = "operator"
 
 class Base(DeclarativeBase):
     pass
@@ -16,7 +23,13 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    user_role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole),
+        nullable=False,
+        default=UserRole.user
+    )
     prefer_name: Mapped[str | None] = mapped_column(String(50))
+
     basic_info: Mapped[str | None] = mapped_column(Text(), nullable=True, default=None)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
