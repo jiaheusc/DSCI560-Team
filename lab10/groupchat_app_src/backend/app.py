@@ -2,7 +2,7 @@ import os
 import asyncio
 from typing import Optional, List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from cryptography.fernet import Fernet
 
-from db import SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers, Questionnaires, UserRole
+from db import SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers, UserRole, TherapistProfile, UserQuestionnaire
 from auth import get_password_hash, verify_password, create_access_token, get_current_user_token, verify_websocket_token
 from websocket_manager import ConnectionManager
 from llm import chat_completion
@@ -30,6 +30,10 @@ APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))
 
 app = FastAPI(title="Group Chat with LLM Bot")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+AVATAR_DIR = "static/avatars"
+
 
 # Allow same-origin and dev origins by default
 app.add_middleware(
@@ -84,6 +88,28 @@ class AuthPayload(BaseModel):
     password: str
     prefer_name: Optional[str] = None
 
+class ChangePasswordPayload(BaseModel):
+    old_password: str
+    new_password: str
+
+class AvatarUpdatePayload(BaseModel):
+    avatar_url: str
+
+class TherapistProfileCreate(BaseModel):
+    bio: Optional[str] = None
+    expertise: Optional[str] = None
+    years_experience: Optional[int] = None
+    license_number: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class TherapistProfileUpdate(BaseModel):
+    bio: Optional[str] = None
+    expertise: Optional[str] = None
+    years_experience: Optional[int] = None
+    license_number: Optional[str] = None
+
 class MessagePayload(BaseModel):
     content: str
     group_id: int
@@ -97,7 +123,7 @@ class ChatGroupUpdate(BaseModel):
 
 class MemberAdd(BaseModel):
     username: str
-
+  
 class ChatGroupResponse(BaseModel):
     id: int
     group_name: Optional[str]
@@ -105,6 +131,10 @@ class ChatGroupResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class QuestionnairePayload(BaseModel):
+    content: dict
+
 
 # --------- Dependencies ---------
 async def get_db() -> AsyncSession:
@@ -246,6 +276,154 @@ async def login(payload: AuthPayload, session: AsyncSession = Depends(get_db)):
     token = create_access_token({"username": u.username, "role": u.user_role.value, "user_id": u.id})
     return {"ok": True, "token": token}
 
+# change password
+@app.post("/api/auth/change-password")
+async def change_password(payload: ChangePasswordPayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    res = await session.execute(select(User).where(User.username == token_data.username))
+    user = res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+    
+    if not verify_password(payload.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+
+    user.password_hash = get_password_hash(payload.new_password)
+    session.add(user)
+    await session.commit()
+
+    return {"ok": True, "msg": "Password updated successfully"}
+
+# get all avatars
+@app.get("/api/avatars")
+async def list_avatars(token_data: TokenData = Depends(get_current_user_token)):
+    try:
+        files = sorted(os.listdir(AVATAR_DIR))
+    except FileNotFoundError:
+        return JSONResponse(status_code=500, content={"error": "Avatar directory not found"})
+
+    valid_exts = (".png", ".jpg", ".jpeg", ".avif", ".webp")
+    avatars = [
+        f"/static/avatars/{f}"
+        for f in files
+        if f.lower().endswith(valid_exts)
+    ]
+
+    return {"avatars": avatars}
+
+# add or modify avatars
+@app.post("/api/users/avatar")
+async def update_avatar(payload: AvatarUpdatePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+
+    res = await session.execute(select(User).where(User.username == token_data.username))
+    user = res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    user.avatar_url = payload.avatar_url
+    session.add(user)
+    await session.commit()
+
+    return {"ok": True}
+
+# list all therapist with profile (bio & expertise)
+@app.get("/api/therapists")
+async def list_therapists(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    stmt = (
+        select(User, TherapistProfile)
+        .outerjoin(TherapistProfile, TherapistProfile.user_id == User.id)
+        .where(User.user_role == UserRole.therapist)
+    )
+
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    therapists = []
+    for user, profile in rows:
+        therapists.append({
+            "username": user.username,
+            "prefer_name": user.prefer_name,
+            "bio": profile.bio if profile else None,
+            "expertise": profile.expertise if profile else None,
+            "has_profile": profile is not None
+        })
+
+    return {"therapists": therapists}
+    
+
+# create therapist profiles
+@app.post("/api/therapist/profile")
+async def create_therapist_profile(payload: TherapistProfileCreate, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(status_code=403, detail="Only therapists can create profiles")
+
+    res = await session.execute(select(TherapistProfile).where(TherapistProfile.user_id == token_data.user_id))
+    existing_profile = res.scalar_one_or_none()
+    if existing_profile:
+        raise HTTPException(status_code=400, detail="Profile already exists")
+
+    new_profile = TherapistProfile(
+        user_id=token_data.user_id,
+        bio=payload.bio,
+        expertise=payload.expertise,
+        years_experience=payload.years_experience,
+        license_number=payload.license_number,
+    )
+
+    session.add(new_profile)
+    await session.commit()
+    await session.refresh(new_profile)
+    return {"ok": True, "profile": new_profile}
+
+@app.post("/api/therapist/profile/update")
+async def update_therapist_profile(payload: TherapistProfileUpdate, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(status_code=403, detail="Only therapists can modify profiles")
+
+    res = await session.execute(select(TherapistProfile).where(TherapistProfile.user_id == token_data.user_id))
+    profile = res.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    update_data = payload.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(profile, key, value)
+
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+
+    return {"ok": True, "profile": profile}
+
+# for therapist get their profile
+@app.get("/api/therapist/profile/me")
+async def get_my_therapist_profile(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(status_code=403, detail="Only therapists can view profile")
+
+    stmt = (
+        select(User, TherapistProfile)
+        .outerjoin(TherapistProfile, TherapistProfile.user_id == User.id)
+        .where(User.id == token_data.user_id)
+    )
+
+    result = await session.execute(stmt)
+    row = result.one_or_none()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    user, profile = row
+
+    return {
+        "username": user.username,
+        "prefer_name": user.prefer_name,
+        "avatar_url": user.avatar_url,
+        "bio": profile.bio if profile else None,
+        "expertise": profile.expertise if profile else None,
+        "years_experience": profile.years_experience if profile else None,
+        "license_number": profile.license_number if profile else None
+    }
+
 # get all message in a group
 # /api/messages?group_id=***
 @app.get("/api/messages")
@@ -276,6 +454,10 @@ async def get_messages(group_id: int, limit: int = 50, session: AsyncSession = D
 # user post a message in the group
 @app.post("/api/messages")
 async def post_message(payload: MessagePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    # res = await session.execute(select(User).where(User.username == token_data.username))
+    # u = res.scalar_one_or_none()
+    # if not u:
+    #     raise HTTPException(status_code=401, detail="Invalid user")
 
     # check if group member
     group_id = payload.group_id
@@ -346,10 +528,6 @@ async def create_chat_group(payload: ChatGroupCreate, token_data: TokenData = De
 # list all groups with group name
 @app.get("/api/chat-groups", response_model=List[ChatGroupResponse])
 async def get_user_groups(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    # res = await session.execute(select(User).where(User.username == token_data.username))
-    # user = res.scalar_one_or_none()
-    # if not user:
-    #     raise HTTPException(status_code=401, detail="Invalid user")
     
     stmt = (
         select(ChatGroups)
@@ -364,7 +542,6 @@ async def get_user_groups(token_data: TokenData = Depends(get_current_user_token
 
 # add a user into a exist group
 # 加新人是therapist加还是用户加？
-# 改改改改改改改改改改改改改改改改改改改改改改改改
 @app.post("/api/chat-groups/{group_id}/members")
 async def add_member_to_group(group_id: int, payload: MemberAdd, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
     res = await session.execute(select(User).where(User.username == token_data.username))
@@ -425,33 +602,44 @@ async def update_group_name(group_id: int, payload: ChatGroupUpdate, token_data:
     return group
 
 # create a questionnaire
-@app.post("/api/questionnaire")
-async def post_questionnaire(data: dict, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    if token_data.role != UserRole.operator:
-        raise HTTPException(status_code=403, detail="Only operator able to create questionnaire")
-
-    q = Questionnaires(content=data["content"])
-    session.add(q)
-    await session.commit()
-    return {"ok": True}
-
-# get questionnaire
-@app.get("/api/questionnaire")
-async def post_questionnaire(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    res = await session.execute(select(Questionnaires).order_by(Questionnaires.updated_at.desc()).limit(1))
-    latest_questionnaire = res.scalar_one_or_none()
-    if not latest_questionnaire:
-        raise HTTPException(status_code=404, detail="No questionnaire found")
-    return latest_questionnaire
-
-# save user questionnaire into db
-# parameter是json形式 直接给embedding
 # @app.post("/api/questionnaire")
 # async def post_questionnaire(data: dict, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
-    # check member?
-# token_data里有 user_id, username, role
+#     if token_data.role != UserRole.operator:
+#         raise HTTPException(status_code=403, detail="Only operator able to create questionnaire")
+
+#     q = Questionnaires(content=data["content"])
+#     session.add(q)
+#     await session.commit()
+#     return {"ok": True}
+
+# get questionnaire
+# @app.get("/api/questionnaire")
+# async def post_questionnaire(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+#     res = await session.execute(select(Questionnaires).order_by(Questionnaires.updated_at.desc()).limit(1))
+#     latest_questionnaire = res.scalar_one_or_none()
+#     if not latest_questionnaire:
+#         raise HTTPException(status_code=404, detail="No questionnaire found")
+#     return latest_questionnaire
 
 
+# save user questionnaire into db
+@app.post("/api/user/questionnaire")
+async def save_questionnaire(payload: QuestionnairePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    res = await session.execute(select(UserQuestionnaire).where(UserQuestionnaire.user_id == token_data.user_id))
+    existing = res.scalar_one_or_none()
+
+    if existing:
+        existing.answers = payload.content
+        session.add(existing)
+    else:
+        new_q = UserQuestionnaire(
+            user_id = token_data.user_id,
+            answers = payload.content
+        )
+        session.add(new_q)
+
+    await session.commit()
+    return {"ok": True}
     
 
 @app.websocket("/ws")

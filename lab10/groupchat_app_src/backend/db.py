@@ -2,7 +2,7 @@ import os
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, func, UniqueConstraint, Enum
+from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, func, UniqueConstraint, Enum, Integer
 from dotenv import load_dotenv
 from sqlalchemy import JSON
 import enum
@@ -29,7 +29,7 @@ class User(Base):
         default=UserRole.user
     )
     prefer_name: Mapped[str | None] = mapped_column(String(50))
-
+    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     basic_info: Mapped[str | None] = mapped_column(Text(), nullable=True, default=None)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -73,6 +73,23 @@ class Questionnaires(Base):
     __tablename__ = "questionnaires"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     content: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class TherapistProfile(Base):
+    __tablename__ = "therapist_profiles"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expertise: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    years_experience: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    license_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+class UserQuestionnaire(Base):
+    __tablename__ = "user_questionnaires"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    answers: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
