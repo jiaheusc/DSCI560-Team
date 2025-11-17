@@ -158,7 +158,6 @@ class TherapistProfile(Base):
     expertise: Mapped[str | None] = mapped_column(String(255), nullable=True)
     years_experience: Mapped[int | None] = mapped_column(Integer, nullable=True)
     license_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    prefer_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
 # ---------------------------------------------------------
 # USER QUESTIONNAIRE ANSWERS (USER SUBMISSIONS)

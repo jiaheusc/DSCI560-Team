@@ -1,0 +1,42 @@
+# =========================
+# System / OS
+# =========================
+# macOS system file
+.DS_Store
+
+# =========================
+# Backend (Python / FastAPI)
+# =========================
+
+# Virtual Environment (matches .venv/, venv/, env/ anywhere)
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# =========================
+# Frontend (React)
+# =========================
+# (App path is: /frontend/groupchat-react-app/)
+
+# Dependencies (matches node_modules/ anywhere)
+node_modules/
+
+# Production Build folder (MUST match the specific path)
+/frontend/groupchat-react-app/build/
+
+# Log files (matches these files anywhere)
+npm-debug.log*
+yarn-error.log
+yarn-debug.log
+
+# =========================
+# Environment Variables (SECRET)
+# =========================
+# Ignores .env, .env.local, .env.development etc.
+# in ALL directories (root, backend/, frontend/groupchat-react-app/)
+.env
+.env.*

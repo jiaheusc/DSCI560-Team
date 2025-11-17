@@ -399,9 +399,7 @@ async def list_therapists(
             "prefer_name": user.prefer_name,
             "bio": profile.bio if profile else None,
             "expertise": profile.expertise if profile else None,
-            "years_experience": profile.years_experience if profile else None,
-            "license_number": profile.license_number if profile else None,
-            
+            "years_experience": profile.years_experience if profile else None
         })
 
     return {"therapists": out}
@@ -938,7 +936,22 @@ async def add_member(
 # ----------------------------------------------------
 # QUESTIONNAIRE + MAILBOX
 # ----------------------------------------------------
+@app.get("/api/user/questionnaire")
+async def save_questionnaire(
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    if token_data.role != UserRole.user:
+        raise HTTPException(403)
+    
+    res = await session.execute(select(UserQuestionnaire).where(UserQuestionnaire.user_id == token_data.user_id))
+    existing = res.scalar_one_or_none()
 
+    if existing:
+        return {"ok": True}
+    
+    return {"ok": False}
+    
 @app.post("/api/user/questionnaire")
 async def save_questionnaire(payload: QuestionnairePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
     # Save questionnaire
