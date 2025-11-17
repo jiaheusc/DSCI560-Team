@@ -61,3 +61,24 @@ export const updateProfile = (payload, token) =>
 // List therapists
 export const listTherapists = (token) =>
   api("/therapists", "GET", null, token);
+
+// List avatars
+export const listAvatars = (token) =>
+  api("/avatars", "GET", null, token);
+
+// Update avatar
+export const updateAvatar = (url, token) =>
+  api("/users/avatar", "POST", { avatar_url: url }, token);
+
+// Change password
+export const changePassword = (old_password, new_password, token) =>
+  api("/auth/change-password", "POST", { old_password, new_password }, token);
+
+export const markMailRead = (mailId, token) =>
+  api("/mailbox/read", "POST", { mail_id: mailId }, token);
+
+export const getPublicTherapistProfile = (id, token) =>
+  api(`/therapist/profile/${id}`, "GET", null, token);
+
+export const assignTherapist = (therapist_id, token) =>
+  api("/users/me/assign-therapist", "POST", { therapist_id }, token);

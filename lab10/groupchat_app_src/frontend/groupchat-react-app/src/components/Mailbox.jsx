@@ -1,59 +1,128 @@
 import React, { useState, useEffect } from "react";
-import { sendMail, getMailbox, replyMail } from "../api";
+import { getMailbox, approveUser, markMailRead } from "../api";
 import { useAuth } from "../AuthContext";
 
 const Mailbox = () => {
   const { token, role } = useAuth();
-  const [inbox, setInbox] = useState([]);
-  const [message, setMessage] = useState("");
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState({});
 
   const load = async () => {
-    if (role === "therapist") {
-      const data = await getMailbox(token);
-      setInbox(data);
-    }
+    const data = await getMailbox(token);
+    setItems(data);
   };
 
   useEffect(() => {
     load();
   }, []);
 
-  const send = async () => {
-    await sendMail(message, token);
-    setMessage("");
+  const toggle = async (id) => {
+    // 展开/折叠
+    setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+
+    // 标记为已读
+    await markMailRead(id, token);
+    load();
   };
 
-  const reply = async (to_user, text) => {
-    await replyMail(to_user, text, token);
+  const labels = {
+    age: "Age Range",
+    gender: "Gender",
+    lookingFor: "What They're Looking For",
+    struggles: "Current Struggles",
+    atmosphere: "Preferred Atmosphere",
+    communication: "Communication Preference",
+  };
+
+  const formatAnswer = (v) => {
+    if (Array.isArray(v)) return v.join(", ");
+    if (v === "" || v == null) return "Not specified";
+    if (typeof v === "object") return Object.values(v).join(", ");
+    return v;
+  };
+
+  const handleApprove = async (userId) => {
+    await approveUser(userId, token);
     load();
   };
 
   return (
-    <div className="auth">
-      <h2>Mailbox</h2>
+    <div className="mailbox-container">
+      <h2 className="mailbox-header">📬 Mailbox</h2>
 
-      {role === "user" && (
-        <>
-          <textarea
-            placeholder="Send a message to therapist"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-          <button onClick={send}>Send</button>
-        </>
-      )}
+      {items.length === 0 && <p>No messages yet.</p>}
 
-      {role === "therapist" &&
-        inbox.map((m) => (
-          <div className="message" key={m.id}>
-            <p><strong>From:</strong> User {m.from_user}</p>
-            <p>{m.content}</p>
+      {items.map((m) => (
+        <div key={m.id} className="mailbox-card">
 
-            <button onClick={() => reply(m.from_user, "Thanks, received!")}>
-              Quick Reply
-            </button>
+          {/* 🔴  */}
+          {!m.is_read && (
+            <span className="mailbox-unread-dot">●</span>
+          )}
+
+          <div className="mailbox-row">
+            <strong>From:</strong> {m.from_user}
           </div>
-        ))}
+
+          <div className="mailbox-row">
+            <strong>Type:</strong>{" "}
+            {m.content.type === "questionnaire" ? "Questionnaire" : "Message"}
+          </div>
+
+          <div className="mailbox-row">
+            <strong>Received:</strong>{" "}
+            {new Date(m.created_at).toLocaleString()}
+          </div>
+
+
+          {/* ------------------ Text message ------------------ */}
+          {m.content.type === "text" && (
+            <div
+              className="mailbox-text"
+              onClick={async () => {
+                await markMailRead(m.id, token);
+                load();
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              {m.content.text}
+            </div>
+          )}
+
+          {/* ---------------- Questionnaire ---------------- */}
+          {m.content.type === "questionnaire" && (
+            <>
+              <button
+                className="mailbox-accordion-btn"
+                onClick={() => toggle(m.id)}
+              >
+                {open[m.id] ? "▲ Hide Questionnaire" : "▼ View Questionnaire"}
+              </button>
+
+              {open[m.id] && (
+                <div className="mailbox-qa-box">
+                  {Object.entries(m.content.answers).map(([key, value]) => (
+                    <div key={key} className="mailbox-qa-row">
+                      <strong>{labels[key] || key}:</strong>{" "}
+                      <span>{formatAnswer(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* APPROVE BUTTON */}
+              {role === "therapist" && (
+                <button
+                  className="mailbox-accept-btn"
+                  onClick={() => handleApprove(m.from_user)}
+                >
+                  ✅ Accept User
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

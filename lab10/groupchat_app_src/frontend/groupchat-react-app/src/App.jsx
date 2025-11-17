@@ -9,6 +9,8 @@ import TherapistHome from "./components/TherapistHome";
 import Mailbox from "./components/Mailbox";
 import Chat from "./components/Chat";
 import Profile from "./components/Profile";
+import TherapistPublicProfile from "./pages/TherapistPublicProfile";
+
 
 const App = () => {
   const { token, role } = useAuth();
@@ -49,7 +51,8 @@ const App = () => {
               role === "therapist" ? <TherapistHome /> : <Navigate to="/login" />
             )}
           />
-
+          {/* Public therapist profile */}
+          <Route path="/therapist-profile/:id" element={<TherapistPublicProfile />} />
           {/* Shared pages */}
           <Route path="/mailbox" element={requireAuth(<Mailbox />)} />
           <Route path="/chat" element={requireAuth(<Chat />)} />

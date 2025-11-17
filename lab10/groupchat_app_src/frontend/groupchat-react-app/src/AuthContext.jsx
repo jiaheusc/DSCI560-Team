@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState } from "react";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [role, setRole] = useState(localStorage.getItem("role") || "");
   const [userId, setUserId] = useState(localStorage.getItem("userId") || "");
   const [authMsg, setAuthMsg] = useState("");   // ⭐ 登录/注册错误消息
@@ -37,7 +37,6 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!res.ok) {
-        // 后端返回 { detail: "..."}
         const err = await res.json();
         setAuthMsg(err.detail || "Login failed");
         return false;
