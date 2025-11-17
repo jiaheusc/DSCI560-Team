@@ -1,0 +1,30 @@
+[
+  {
+    "id": "anxiety_coping_basics",
+    "title": "Coping with Anxiety: Practical Strategies",
+    "topics": ["anxiety", "panic", "worry", "stress"],
+    "summary": "Simple breathing, grounding, scheduling, and cognitive tips for anxiety.",
+    "url": "https://www.nimh.nih.gov/health/topics/anxiety-disorders"
+  },
+  {
+    "id": "depression_support_basics",
+    "title": "Feeling Down: How to Get Support",
+    "topics": ["low mood", "sadness", "motivation"],
+    "summary": "Information about mood, self-care, and when to seek professional support.",
+    "url": "https://www.nimh.nih.gov/health/topics/depression"
+  },
+  {
+    "id": "campus_counseling_example",
+    "title": "Your Campus Counseling Center",
+    "topics": ["students", "university", "counseling"],
+    "summary": "Confidential counseling services for enrolled students. Replace with your actual campus info.",
+    "url": "https://your-university-counseling.example"
+  },
+  {
+    "id": "us_crisis_988",
+    "title": "988 Suicide & Crisis Lifeline (US)",
+    "topics": ["crisis", "self-harm", "suicide"],
+    "summary": "24/7 free and confidential emotional support in the US.",
+    "url": "https://988lifeline.org/"
+  }
+]
