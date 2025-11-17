@@ -6,13 +6,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import select, desc, Enum
+from sqlalchemy import select, desc, Enum, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
 
 from cryptography.fernet import Fernet
 
-from db import SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers, UserRole, TherapistProfile, UserQuestionnaire
+from db import SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers, UserRole, TherapistProfile, UserQuestionnaire, UserTherapist, UserTherapistChat
 from auth import get_password_hash, verify_password, create_access_token, get_current_user_token, verify_websocket_token
 from websocket_manager import ConnectionManager
 from llm import chat_completion
@@ -95,6 +95,16 @@ class ChangePasswordPayload(BaseModel):
 class AvatarUpdatePayload(BaseModel):
     avatar_url: str
 
+class PreferNameUpdatePayload(BaseModel):
+    prefer_name: str
+
+class AssignTherapistPayload(BaseModel):
+    therapist_id: int
+
+class ChatSendPayload(BaseModel):
+    target_id: int
+    message: str
+
 class TherapistProfileCreate(BaseModel):
     bio: Optional[str] = None
     expertise: Optional[str] = None
@@ -113,6 +123,9 @@ class TherapistProfileUpdate(BaseModel):
 class MessagePayload(BaseModel):
     content: str
     group_id: int
+
+class MarkReadPayload(BaseModel):
+    message_id: int
 
 class ChatGroupCreate(BaseModel):
     group_name: Optional[str] = "new group"
@@ -190,6 +203,14 @@ async def maybe_answer_with_llm(session: AsyncSession, content: str, group_id: i
     await session.refresh(bot_msg)
     await broadcast_message(session, bot_msg, group_id)
     return
+
+async def get_user_therapist_relation(session, user_id_or_therapist_id: int):
+    stmt = select(UserTherapist).where(
+        (UserTherapist.user_id == user_id_or_therapist_id) |
+        (UserTherapist.therapist_id == user_id_or_therapist_id)
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
 
 # --------- Routes ---------
 @app.on_event("startup")
@@ -325,6 +346,21 @@ async def update_avatar(payload: AvatarUpdatePayload, token_data: TokenData = De
 
     return {"ok": True}
 
+# add or modify prefer_name
+@app.post("/api/users/prefer_name")
+async def update_prefer_name(payload: PreferNameUpdatePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+
+    res = await session.execute(select(User).where(User.username == token_data.username))
+    user = res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    user.prefer_name = payload.prefer_name
+    session.add(user)
+    await session.commit()
+
+    return {"ok": True}
+
 # list all therapist with profile (bio & expertise)
 @app.get("/api/therapists")
 async def list_therapists(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
@@ -340,6 +376,7 @@ async def list_therapists(token_data: TokenData = Depends(get_current_user_token
     therapists = []
     for user, profile in rows:
         therapists.append({
+            "id": user.id, 
             "username": user.username,
             "prefer_name": user.prefer_name,
             "bio": profile.bio if profile else None,
@@ -349,6 +386,250 @@ async def list_therapists(token_data: TokenData = Depends(get_current_user_token
 
     return {"therapists": therapists}
     
+# user choose a therapist
+@app.post("/api/users/me/assign-therapist")
+async def assign_my_therapist(payload: AssignTherapistPayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.user:
+        raise HTTPException(status_code=403, detail="Only users can assign a therapist")
+
+    user_id = token_data.user_id
+
+    res = await session.execute(select(User).where(User.id == payload.therapist_id))
+    therapist = res.scalar_one_or_none()
+
+    if not therapist or therapist.user_role != UserRole.therapist:
+        raise HTTPException(status_code=400, detail="Invalid therapist")
+
+    res = await session.execute(select(UserTherapist).where(UserTherapist.user_id == user_id))
+    relation = res.scalar_one_or_none()
+
+    if relation:
+        relation.therapist_id = payload.therapist_id
+        session.add(relation)
+    else:
+        new_rel = UserTherapist(
+            user_id=user_id,
+            therapist_id=payload.therapist_id
+        )
+        session.add(new_rel)
+
+    await session.commit()
+
+    return {"ok": True, "therapist_id": payload.therapist_id}
+
+# user get their therapist profile
+@app.get("/api/users/me/therapist")
+async def get_my_therapist(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.user:
+        raise HTTPException(status_code=403, detail="Only users can check therapist profile")
+
+    user_id = token_data.user_id
+
+    res = await session.execute(select(UserTherapist).where(UserTherapist.user_id == user_id))
+    link = res.scalar_one_or_none()
+
+    if not link:
+        return {"has_therapist": False}
+
+    therapist_id = link.therapist_id
+
+    res = await session.execute(select(User).where(User.id == therapist_id))
+    therapist = res.scalar_one()
+
+    res = await session.execute(select(TherapistProfile).where(TherapistProfile.user_id == therapist_id))
+    profile = res.scalar_one_or_none()
+
+    return {
+        "has_therapist": True,
+        "therapist": {
+            "id": therapist.id,
+            "username": therapist.username, # 需要吗？
+            "prefer_name": therapist.prefer_name,
+            "avatar_url": therapist.avatar_url,
+            "bio": profile.bio if profile else None,
+            "expertise": profile.expertise if profile else None,
+            "years_experience": profile.years_experience if profile else None,
+        }
+    }
+
+# send message (chat between user and therapist)
+# parameter: target_id, message
+@app.post("/api/therapist-chat/send")
+async def send_user_therapist_message(payload: ChatSendPayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    sender_id = token_data.user_id
+    target_id = payload.target_id
+
+    rel = await get_user_therapist_relation(session, sender_id)
+    if not rel:
+        raise HTTPException(status_code=403, detail="No therapist-user relationship found")
+
+    if sender_id == rel.user_id:
+        if target_id != rel.therapist_id:
+            raise HTTPException(status_code=403, detail="You are not assigned to this therapist")
+        
+        user_id = rel.user_id
+        therapist_id = rel.therapist_id
+    
+    elif sender_id == rel.therapist_id:
+        if target_id != rel.user_id:
+            raise HTTPException(status_code=403, detail="Cannot message this user")
+        
+        user_id = rel.user_id
+        therapist_id = rel.therapist_id
+
+    else:
+        raise HTTPException(status_code=403, detail="Invalid sender")
+
+    chat = UserTherapistChat(
+        user_id=user_id,
+        therapist_id=therapist_id,
+        sender_id=sender_id,
+        message=encrypt(payload.message),
+        is_read=False,
+    )
+    session.add(chat)
+    await session.commit()
+    await session.refresh(chat)
+
+    return {"ok": True, "chat_id": chat.id, "created_at": chat.created_at}
+
+# mark unread message to read
+# parameter: message_id
+@app.post("/api/therapist-chat/mark-read")
+async def mark_message_as_read(payload: MarkReadPayload,token_data: TokenData = Depends(get_current_user_token),session: AsyncSession = Depends(get_db)):
+    my_id = token_data.user_id
+
+    stmt = select(UserTherapistChat).where(UserTherapistChat.id == payload.message_id)
+    res = await session.execute(stmt)
+    msg = res.scalar_one_or_none()
+
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if my_id not in (msg.user_id, msg.therapist_id):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    if msg.sender_id == my_id:
+        raise HTTPException(status_code=400, detail="Cannot mark your own message as read")
+
+    msg.is_read = True
+    session.add(msg)
+    await session.commit()
+    await session.refresh(msg)
+
+    return {"ok": True, "message_id": msg.id}
+
+# list all message between therapist and user (for user)
+@app.get("/api/therapist-chat/messages")
+async def get_chat_messages(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    my_id = token_data.user_id
+
+    rel = await get_user_therapist_relation(session, my_id)
+    if not rel:
+        raise HTTPException(status_code=403, detail="No therapist-user relationship found")
+
+    user_id = rel.user_id
+    therapist_id = rel.therapist_id
+
+    stmt = (
+        select(UserTherapistChat)
+        .where(
+            (UserTherapistChat.user_id == user_id) &
+            (UserTherapistChat.therapist_id == therapist_id)
+        )
+        .order_by(UserTherapistChat.created_at)
+    )
+    res = await session.execute(stmt)
+    messages = res.scalars().all()
+
+    return {
+        "messages": [
+            {
+                "id": m.id,
+                "sender_id": m.sender_id,
+                "message": decrypt(m.message),
+                "is_read": m.is_read,
+                "created_at": m.created_at
+            }
+            for m in messages
+        ]
+    }
+
+# list all users of the therapist
+@app.get("/api/therapist/my-users")
+async def get_my_users(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(status_code=403, detail="Only therapists can access this")
+
+    therapist_id = token_data.user_id
+    res = await session.execute(select(UserTherapist).where(UserTherapist.therapist_id == therapist_id))
+    relations = res.scalars().all()
+
+    if not relations:
+        return {"users": []}
+
+    users = []
+
+    for rel in relations:
+        user_res = await session.execute(select(User).where(User.id == rel.user_id))
+        user = user_res.scalar_one_or_none()
+
+        unread_stmt = select(func.count(UserTherapistChat.id)).where(
+            (UserTherapistChat.user_id == user.id) &
+            (UserTherapistChat.therapist_id == therapist_id) &
+            (UserTherapistChat.sender_id == user.id) &  # user 发给 therapist
+            (UserTherapistChat.is_read == False)
+        )
+        unread_res = await session.execute(unread_stmt)
+        unread_count = unread_res.scalar()
+
+        users.append({
+            "id": user.id,
+            "username": user.username,
+            "prefer_name": user.prefer_name,
+            "avatar_url": user.avatar_url,
+            "unread": unread_count
+        })
+
+    return {"users": users}
+
+# therapist get all message with one user
+@app.get("/api/therapist-chat/messages/{user_id}")
+async def get_chat_messages_with_user(user_id: int, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(status_code=403, detail="Only therapists can view this")
+
+    therapist_id = token_data.user_id
+
+    stmt = select(UserTherapist).where((UserTherapist.user_id == user_id) & (UserTherapist.therapist_id == therapist_id))
+    res = await session.execute(stmt)
+    rel = res.scalar_one_or_none()
+
+    if not rel:
+        raise HTTPException(status_code=403, detail="This user is not assigned to you")
+
+    msg_stmt = (
+        select(UserTherapistChat)
+        .where(
+            (UserTherapistChat.user_id == user_id) &
+            (UserTherapistChat.therapist_id == therapist_id)
+        )
+        .order_by(UserTherapistChat.created_at)
+    )
+    msg_res = await session.execute(msg_stmt)
+    messages = msg_res.scalars().all()
+
+    return {
+        "messages": [
+            {
+                "id": m.id,
+                "sender_id": m.sender_id,
+                "message": decrypt(m.message),
+                "is_read": m.is_read,
+                "created_at": m.created_at
+            }
+            for m in messages
+        ]
+    }
 
 # create therapist profiles
 @app.post("/api/therapist/profile")
@@ -374,6 +655,7 @@ async def create_therapist_profile(payload: TherapistProfileCreate, token_data: 
     await session.refresh(new_profile)
     return {"ok": True, "profile": new_profile}
 
+# therapist update their profile
 @app.post("/api/therapist/profile/update")
 async def update_therapist_profile(payload: TherapistProfileUpdate, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
     if token_data.role != UserRole.therapist:
@@ -393,6 +675,21 @@ async def update_therapist_profile(payload: TherapistProfileUpdate, token_data: 
     await session.refresh(profile)
 
     return {"ok": True, "profile": profile}
+
+# for user get their profile
+@app.get("/api/user/profile/me")
+async def get_my_user_profile(token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
+    if token_data.role != UserRole.user:
+        raise HTTPException(status_code=403, detail="Only user can view profile")
+
+    res = await session.execute(select(User).where(User.id == token_data.user_id))
+    user = res.scalar_one_or_none()
+
+    return {
+        "username": user.username,
+        "prefer_name": user.prefer_name,
+        "avatar_url": user.avatar_url
+    }
 
 # for therapist get their profile
 @app.get("/api/therapist/profile/me")

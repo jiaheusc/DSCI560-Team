@@ -93,6 +93,22 @@ class UserQuestionnaire(Base):
     created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+class UserTherapist(Base):
+    __tablename__ = "user_therapists"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    therapist_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+class UserTherapistChat(Base):
+    __tablename__ = "user_therapist_chats"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    therapist_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
