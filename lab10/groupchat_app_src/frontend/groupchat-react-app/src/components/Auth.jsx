@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import ConfidentialityModal from "./ConfidentialityModal";
 
 const Auth = () => {
-    const { login, signup, authMsg } = useAuth();
+    const { login, signup, authMsg,token } = useAuth();
     const [u, setU] = useState("");
     const [p, setP] = useState("");
     const [localError, setLocalError] = useState("");
@@ -13,12 +13,32 @@ const Auth = () => {
     const navigate = useNavigate();
 
     // Navigate based on role inside token
-    const goNextByToken = (token) => {
+    const goNextByToken = async (token) => {
         if (!token) return;
 
         const payload = JSON.parse(atob(token.split(".")[1])); // decode JWT
         
-        if (payload.role === "user") navigate("/questionnaire");
+        if (payload.role === "user"){
+            const r = await fetch("/api/user/questionnaire", {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+            const q = await r.json();
+            if (!q.ok) {
+                navigate("/questionnaire");
+                return;
+            }
+            const r2 = await fetch("/api/users/me/therapist", {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const t = await r2.json();
+
+            if (!t.has_therapist) {
+                navigate("/select-therapist");
+                return;
+            }
+
+            navigate("/user");
+        }
         else if (payload.role === "therapist") navigate("/therapist");
         else if (payload.role === "operator") navigate("/admin");
         else navigate("/questionnaire");
@@ -31,7 +51,7 @@ const Auth = () => {
         const ok = await login(u, p);
 
         if (ok) {
-            goNextByToken(localStorage.getItem("token"));
+            goNextByToken(token);
         }
     };
 
@@ -54,7 +74,7 @@ const Auth = () => {
         const ok = await signup(u, p);
 
         if (ok) {
-            goNextByToken(localStorage.getItem("token"));
+            goNextByToken(token);
         }
     };
 
@@ -94,7 +114,7 @@ const Auth = () => {
             <button onClick={handleSignup}>Sign Up</button>
 
             {(localError || authMsg) && (
-                <p className="error-message">{localError || authMsg}</p>
+                <p className="error-message">{localError || authMsg}</p >
             )}
         </div>
     );

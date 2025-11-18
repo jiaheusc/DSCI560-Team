@@ -17,7 +17,7 @@ from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
-from model.grouping import GroupAssigner
+from model.grouping import GroupRecommender
 from db import (
     SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers,
     UserRole, TherapistProfile, UserQuestionnaire, MailboxMessage,
@@ -483,7 +483,7 @@ async def get_my_therapist_profile(
     if not profile:
         profile = TherapistProfile(
             user_id=user.id, bio="", expertise="",
-            years_experience=0, license_number="", prefer_name=user.prefer_name
+            years_experience=0, license_number=""
         )
         session.add(profile)
         await session.commit()
@@ -496,8 +496,7 @@ async def get_my_therapist_profile(
         "bio": profile.bio,
         "expertise": profile.expertise,
         "years_experience": profile.years_experience,
-        "license_number": profile.license_number,
-        "prefer_name": profile.prefer_name
+        "license_number": profile.license_number
     }
 
 
@@ -529,6 +528,46 @@ async def assign_my_therapist(
             therapist_id=payload.therapist_id
         )
         session.add(rel)
+
+    await session.commit()
+    await session.refresh(rel)
+
+
+    # Get user info
+    user = await session.get(User, token_data.user_id)
+    q_res = await session.execute(select(UserQuestionnaire).where(UserQuestionnaire.user_id == token_data.user_id))
+    questionnaire = q_res.scalar_one_or_none()
+
+    if not questionnaire:
+        notice = MailboxMessage(
+            from_user=user.id,
+            to_user=rel.therapist_id,
+            content={
+                "type": "new_patient_assigned",
+                "user": user.username,
+                "user_id": user.id,
+                "message": "This user has selected you as their therapist, but has not completed their questionnaire yet."
+            }
+        )
+        session.add(notice)
+        await session.commit()
+        return {"ok": True, "detail": "Therapist assigned, questionnaire pending."}
+    
+    rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+    recommendation = rec.recommend(token_data.user_id)
+
+    # send to target therapist
+    notice = MailboxMessage(
+        from_user=user.id,
+        to_user=rel.therapist_id,
+        content={
+            "type": "questionnaire",
+            "user": user.username,
+            "recommendation": recommendation,
+            "answers": questionnaire.answers
+        }
+    )
+    session.add(notice)
 
     await session.commit()
     return {"ok": True}
@@ -970,35 +1009,7 @@ async def save_questionnaire(payload: QuestionnairePayload, token_data: TokenDat
         )
         session.add(questionnaire)
     await session.commit()
-    await session.refresh(questionnaire)
 
-
-    # Get user info
-    user = await session.get(User, token_data.user_id)
-    ga = GroupAssigner(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
-    gid = ga.assign(token_data.user_id)
-
-    # look for chosen therapist
-    rel = await session.execute(select(UserTherapist).where(UserTherapist.user_id == token_data.user_id))
-    rel = rel.scalar_one_or_none()
-
-    if rel:
-        therapist_id = rel.therapist_id
-
-        # send to target therapist
-        notice = MailboxMessage(
-            from_user=user.id,
-            to_user=therapist_id,
-            content={
-                "type": "questionnaire",
-                "user": user.username,
-                "group_id": gid,
-                "answers": payload.content
-            }
-        )
-        session.add(notice)
-
-    await session.commit()
     return {"ok": True}
 
 # Public therapist profile
