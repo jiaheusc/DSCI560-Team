@@ -9,9 +9,6 @@ CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     user_role ENUM('user', 'therapist', 'operator') NOT NULL DEFAULT 'user',
-    prefer_name VARCHAR(50),
-    avatar_url VARCHAR(255) DEFAULT NULL,
-    basic_info TEXT,
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -59,6 +56,8 @@ CREATE TABLE IF NOT EXISTS questionnaires (
 CREATE TABLE IF NOT EXISTS therapist_profiles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
+    avatar_url VARCHAR(255) DEFAULT NULL,
+    prefer_name VARCHAR(50),
     bio TEXT,
     expertise VARCHAR(255),
     years_experience INT,
@@ -68,10 +67,24 @@ CREATE TABLE IF NOT EXISTS therapist_profiles (
     CONSTRAINT fk_therapist_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    avatar_url VARCHAR(255) DEFAULT NULL,
+    prefer_name VARCHAR(50),
+    bio TEXT,
+    ai_summary MEDIUMTEXT,
+    mood_state JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_profile_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS user_questionnaires (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
     answers JSON NOT NULL,
+    recommendation JSON DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_questionnaire_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

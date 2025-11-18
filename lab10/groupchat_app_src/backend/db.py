@@ -50,11 +50,6 @@ class User(Base):
 
     password_hash: Mapped[str] = mapped_column(String(255))
 
-    prefer_name: Mapped[str | None] = mapped_column(String(50))
-    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    basic_info: Mapped[str | None] = mapped_column(Text, default=None)
-
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now()
@@ -154,10 +149,39 @@ class TherapistProfile(Base):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
 
+    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    prefer_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     expertise: Mapped[str | None] = mapped_column(String(255), nullable=True)
     years_experience: Mapped[int | None] = mapped_column(Integer, nullable=True)
     license_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True),
+                                                 server_default=func.now(),
+                                                 onupdate=func.now())
+
+# ---------------------------------------------------------
+# USER PROFILE
+# ---------------------------------------------------------
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+
+    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    prefer_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # for inside used
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mood_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True),
+                                                 server_default=func.now(),
+                                                 onupdate=func.now())
 
 # ---------------------------------------------------------
 # USER QUESTIONNAIRE ANSWERS (USER SUBMISSIONS)
@@ -170,7 +194,7 @@ class UserQuestionnaire(Base):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     answers: Mapped[dict] = mapped_column(JSON, nullable=False)
-
+    recommendation: Mapped[dict] = mapped_column(JSON, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True),
                                                  server_default=func.now(),

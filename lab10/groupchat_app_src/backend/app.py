@@ -21,7 +21,7 @@ from model.grouping import GroupRecommender
 from db import (
     SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers,
     UserRole, TherapistProfile, UserQuestionnaire, MailboxMessage,
-    UserTherapist, UserTherapistChat
+    UserTherapist, UserTherapistChat, UserProfile
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
@@ -106,7 +106,6 @@ class TokenData(BaseModel):
 class AuthPayload(BaseModel):
     username: str
     password: str
-    prefer_name: Optional[str] = None
 
 
 class ChangePasswordPayload(BaseModel):
@@ -132,6 +131,8 @@ class ChatSendPayload(BaseModel):
 
 
 class TherapistProfileCreate(BaseModel):
+    avatar_url: Optional[str] = None
+    prefer_name: Optional[str] = None
     bio: Optional[str] = None
     expertise: Optional[str] = None
     years_experience: Optional[int] = None
@@ -140,13 +141,47 @@ class TherapistProfileCreate(BaseModel):
 
 
 class TherapistProfileUpdate(BaseModel):
+    avatar_url: Optional[str] = None
+    prefer_name: Optional[str] = None
     bio: Optional[str] = None
     expertise: Optional[str] = None
     years_experience: Optional[int] = None
     license_number: Optional[str] = None
     prefer_name: Optional[str] = None
     
+class UserProfileForTherapist(BaseModel):
+    user_id: int
+    avatar: Optional[str] = None
+    prefer_name: Optional[str] = None
+    bio: Optional[str] = None
+    ai_summary: Optional[str] = None
+    mood_state: Optional[dict] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
+    class Config:
+        from_attributes = True
+
+class UserProfileCreate(BaseModel):
+    avatar: Optional[str] = None
+    prefer_name: Optional[str] = None
+    bio: Optional[str] = None
+
+class UserProfileUpdate(BaseModel):
+    avatar: Optional[str] = None
+    prefer_name: Optional[str] = None
+    bio: Optional[str] = None
+
+class UserProfileResponse(BaseModel):
+    user_id: int
+    username: str
+    avatar_url: Optional[str] = None
+    prefer_name: Optional[str] = None
+    bio: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+    
 
 class MessagePayload(BaseModel):
     content: str
@@ -272,9 +307,7 @@ async def signup(payload: AuthPayload, session: AsyncSession = Depends(get_db)):
     u = User(
         username=payload.username,
         password_hash=get_password_hash(payload.password),
-        prefer_name=payload.prefer_name,
-        user_role=UserRole.user,
-        basic_info=None
+        user_role=UserRole.user
     )
     session.add(u)
     await session.commit()
@@ -324,7 +357,7 @@ async def change_password(
 
 
 # ----------------------------------------------------
-# AVATAR + PROFILE
+# LIST AVATAR
 # ----------------------------------------------------
 
 @app.get("/api/avatars")
@@ -343,38 +376,125 @@ async def list_avatars(token_data: TokenData = Depends(get_current_user_token)):
     }
 
 
-@app.post("/api/users/avatar")
-async def update_avatar(
-    payload: AvatarUpdatePayload,
+# @app.post("/api/users/avatar")
+# async def update_avatar(
+#     payload: AvatarUpdatePayload,
+#     token_data: TokenData = Depends(get_current_user_token),
+#     session: AsyncSession = Depends(get_db)
+# ):
+#     user = (await session.execute(
+#         select(User).where(User.username == token_data.username)
+#     )).scalar_one_or_none()
+
+#     user.avatar_url = payload.avatar_url
+#     session.add(user)
+#     await session.commit()
+
+#     return {"ok": True}
+
+
+# @app.post("/api/users/prefer_name")
+# async def update_prefer_name(
+#     payload: PreferNameUpdatePayload,
+#     token_data: TokenData = Depends(get_current_user_token),
+#     session: AsyncSession = Depends(get_db)
+# ):
+#     user = (await session.execute(
+#         select(User).where(User.username == token_data.username)
+#     )).scalar_one_or_none()
+
+#     user.prefer_name = payload.prefer_name
+#     session.add(user)
+#     await session.commit()
+
+#     return {"ok": True}
+
+# ----------------------------------------------------
+# USER PROFILE
+# ----------------------------------------------------
+@app.post("/api/user/profile")
+async def create_user_profile(
+    payload: UserProfileCreate,
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
-    user = (await session.execute(
-        select(User).where(User.username == token_data.username)
+    if token_data.role != UserRole.user:
+        raise HTTPException(403)
+
+    exists = (await session.execute(
+        select(UserProfile).where(UserProfile.user_id == token_data.user_id)
     )).scalar_one_or_none()
 
-    user.avatar_url = payload.avatar_url
-    session.add(user)
+    if exists:
+        raise HTTPException(400, "Profile already exists")
+
+    profile = UserProfile(
+        user_id=token_data.user_id,
+        avatar_url=payload.avatar_url,
+        prefer_name=payload.prefer_name,
+        bio=payload.bio,
+    )
+    session.add(profile)
     await session.commit()
+    await session.refresh(profile)
 
-    return {"ok": True}
+    return {"ok": True, "profile": profile}
 
-
-@app.post("/api/users/prefer_name")
-async def update_prefer_name(
-    payload: PreferNameUpdatePayload,
+@app.post("/api/user/profile/update")
+async def update_user_profile(
+    payload: UserProfileUpdate,
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
-    user = (await session.execute(
-        select(User).where(User.username == token_data.username)
+    if token_data.role != UserRole.user:
+        raise HTTPException(403)
+
+    profile = (await session.execute(
+        select(UserProfile).where(UserProfile.user_id == token_data.user_id)
     )).scalar_one_or_none()
 
-    user.prefer_name = payload.prefer_name
-    session.add(user)
-    await session.commit()
+    if not profile:
+        raise HTTPException(404, "Profile not found")
 
-    return {"ok": True}
+    data = payload.dict(exclude_unset=True)
+    for k, v in data.items():
+        setattr(profile, k, v)
+
+    session.add(profile)
+    await session.commit()
+    await session.refresh(profile)
+
+    return {"ok": True, "profile": profile}
+
+@app.get("/api/user/profile/me", response_model=UserProfileResponse)
+async def get_my_user_profile(
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    if token_data.role != UserRole.user:
+        raise HTTPException(403)
+
+    stmt = select(UserProfile).where(UserProfile.user_id == token_data.user_id)
+    profile = (await session.execute(stmt)).scalar_one_or_none()
+
+    if not profile:
+        profile = UserProfile(
+            user_id=token_data.user_id,
+            avatar_url=None,
+            prefer_name=None,
+            bio=None
+        )
+        session.add(profile)
+        await session.commit()
+        await session.refresh(profile)
+
+    return {
+        "user_id": token_data.user_id,
+        "username": token_data.username,
+        "avatar_url": profile.avatar_url,
+        "prefer_name": profile.prefer_name,
+        "bio": profile.bio
+    }
 
 
 # ----------------------------------------------------
@@ -399,7 +519,7 @@ async def list_therapists(
         out.append({
             "id": user.id,
             "username": user.username,
-            "prefer_name": user.prefer_name,
+            "prefer_name": profile.prefer_name if profile else None,
             "bio": profile.bio if profile else None,
             "expertise": profile.expertise if profile else None,
             "years_experience": profile.years_experience if profile else None
@@ -424,18 +544,19 @@ async def create_therapist_profile(
     if exists:
         raise HTTPException(400, "Profile already exists")
 
-    p = TherapistProfile(
+    profile = TherapistProfile(
         user_id=token_data.user_id,
+        avatar_url=payload.avatar_url,
+        prefer_name=payload.prefer_name,
         bio=payload.bio,
         expertise=payload.expertise,
         years_experience=payload.years_experience,
         license_number=payload.license_number,
-        prefer_name=payload.prefer_name
     )
-    session.add(p)
+    session.add(profile)
     await session.commit()
-    await session.refresh(p)
-    return {"ok": True, "profile": p}
+    await session.refresh(profile)
+    return {"ok": True, "profile": profile}
 
 
 @app.post("/api/therapist/profile/update")
@@ -473,37 +594,37 @@ async def get_my_therapist_profile(
     if token_data.role != UserRole.therapist:
         raise HTTPException(403)
 
-    stmt = (
-        select(User, TherapistProfile)
-        .outerjoin(TherapistProfile)
-        .where(User.id == token_data.user_id)
-    )
-    user, profile = (await session.execute(stmt)).one_or_none()
+    stmt = select(TherapistProfile).where(TherapistProfile.user_id == token_data.user_id)
+    profile = (await session.execute(stmt)).scalar_one_or_none()
 
     if not profile:
         profile = TherapistProfile(
-            user_id=user.id, bio="", expertise="",
-            years_experience=0, license_number=""
+            user_id=token_data.user_id,
+            avatar_url="",
+            prefer_name="",
+            bio="",
+            expertise="",
+            years_experience=0,
+            license_number=""
         )
         session.add(profile)
         await session.commit()
         await session.refresh(profile)
 
     return {
-        "username": user.username,
-        "prefer_name": user.prefer_name,
-        "avatar_url": user.avatar_url,
+        "user_id": token_data.user_id,
+        "username": token_data.username,
+        "avatar_url": profile.avatar_url,
+        "prefer_name": profile.prefer_name,
         "bio": profile.bio,
         "expertise": profile.expertise,
         "years_experience": profile.years_experience,
         "license_number": profile.license_number
     }
 
-
 # ----------------------------------------------------
 # ASSIGN THERAPIST (User → Therapist)
 # ----------------------------------------------------
-
 @app.post("/api/users/me/assign-therapist")
 async def assign_my_therapist(
     payload: AssignTherapistPayload,
@@ -555,6 +676,7 @@ async def assign_my_therapist(
     
     rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
     recommendation = rec.recommend(token_data.user_id)
+    questionnaire.recommendation = recommendation
 
     # send to target therapist
     notice = MailboxMessage(
@@ -593,12 +715,12 @@ async def get_my_therapist(
         "has_therapist": True,
         "therapist": {
             "id": therapist.id,
-            "username": therapist.username,
-            "avatar_url": therapist.avatar_url,
+            "username": therapist.username,     # therapist 的username应该给user看吗？
+            "avatar_url": profile.avatar_url,
+            "prefer_name": profile.prefer_name if profile else None,
             "bio": profile.bio if profile else None,
             "expertise": profile.expertise if profile else None,
             "years_experience": profile.years_experience if profile else None,  
-            "prefer_name": profile.prefer_name if profile else None
         }
     }
 
@@ -728,6 +850,10 @@ async def therapist_list_users(
     out = []
     for r in relations:
         user = await session.get(User, r.user_id)
+        profile = await session.execute(
+            select(UserProfile).where(UserProfile.user_id == user.id)
+        )
+        profile = profile.scalar_one_or_none()
 
         unread_stmt = select(func.count(UserTherapistChat.id)).where(
             (UserTherapistChat.user_id == user.id) &
@@ -740,12 +866,38 @@ async def therapist_list_users(
         out.append({
             "id": user.id,
             "username": user.username,
-            "prefer_name": user.prefer_name,
-            "avatar_url": user.avatar_url,
+            "prefer_name": profile.prefer_name if profile else None,
+            "avatar_url": profile.avatar_url if profile else None,
             "unread": unread_count
         })
 
     return {"users": out}
+
+@app.get("/api/therapist/user/{user_id}", response_model=UserProfileForTherapist)
+async def get_user_profile_for_therapist(
+    user_id: int,
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):  
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(403)
+    
+    user_therapist = (await session.execute(
+        select(UserTherapist).
+        where(UserTherapist.therapist_id == token_data.user_id and UserTherapist.user_id == user_id)
+    )).scalar_one_or_none()
+
+    if not user_therapist:
+        raise HTTPException(404)
+
+    profile = (await session.execute(
+        select(UserProfile).
+        where(UserProfile.user_id == user_id)
+    )).scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    return profile
 
 
 @app.get("/api/therapist-chat/messages/{user_id}")
@@ -977,21 +1129,21 @@ async def add_member(
 # ----------------------------------------------------
 # QUESTIONNAIRE + MAILBOX
 # ----------------------------------------------------
-@app.get("/api/user/questionnaire")
-async def save_questionnaire(
-    token_data: TokenData = Depends(get_current_user_token),
-    session: AsyncSession = Depends(get_db)
-):
-    if token_data.role != UserRole.user:
-        raise HTTPException(403)
+# @app.get("/api/user/questionnaire")
+# async def get_questionnaire(
+#     token_data: TokenData = Depends(get_current_user_token),
+#     session: AsyncSession = Depends(get_db)
+# ):
+#     if token_data.role != UserRole.user:
+#         raise HTTPException(403)
     
-    res = await session.execute(select(UserQuestionnaire).where(UserQuestionnaire.user_id == token_data.user_id))
-    existing = res.scalar_one_or_none()
+#     res = await session.execute(select(UserQuestionnaire).where(UserQuestionnaire.user_id == token_data.user_id))
+#     existing = res.scalar_one_or_none()
 
-    if existing:
-        return {"ok": True}
+#     if existing:
+#         return {"ok": True}
     
-    return {"ok": False}
+#     return {"ok": False}
     
 @app.post("/api/user/questionnaire")
 async def save_questionnaire(payload: QuestionnairePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
@@ -1055,19 +1207,30 @@ async def get_mailbox(
     out = []
     for m in msgs:
         c = m.content or {}
-        if c.get("type") == "questionnaire":
-            out.append({
-                "id": m.id,
-                "from_user": m.from_user,
-                "to_user": m.to_user,
-                "content": {
-                    "type": "questionnaire",
-                    "user": c.get("user"),
-                    "answers": c.get("answers")
-                },
-                "is_read": m.is_read,
-                "created_at": m.created_at
-            })
+        if isinstance(c, dict):
+            if c.get("type") == "questionnaire":
+                out.append({
+                    "id": m.id,
+                    "from_user": m.from_user,
+                    "to_user": m.to_user,
+                    "content": {
+                        "type": "questionnaire",
+                        "user": c.get("user"),
+                        "answers": c.get("answers"),
+                        "recommendation": c.get("recommendation") 
+                    },
+                    "is_read": m.is_read,
+                    "created_at": m.created_at
+                })
+            else:
+                out.append({
+                    "id": m.id,
+                    "from_user": m.from_user,
+                    "to_user": m.to_user,
+                    "content": {"type": "text", "text": str(c)},
+                    "is_read": m.is_read,
+                    "created_at": m.created_at
+                })
         else:
             out.append({
                 "id": m.id,
