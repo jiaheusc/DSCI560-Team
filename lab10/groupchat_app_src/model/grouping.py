@@ -1,12 +1,13 @@
+
 """
- Call:
-    from grouping_min import GroupAssigner
-    ga = GroupAssigner(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
-    gid = ga.assign(user_id) 
+Usage:
+    rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+    result = rec.recommend(user_id=42)
+    # result -> {'decision':'group', 'group_id': 5, 'score':0.72, 'threshold':0.65, 'reason':'passes_threshold'}
+    # or      -> {'decision':'new_group', 'score':0.58, 'threshold':0.65, 'reason':'below_threshold'}
 """
 
-import os
-import json
+import os, json
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -16,25 +17,20 @@ from sentence_transformers import SentenceTransformer
 
 DEFAULT_DB_URL = "mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat"
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
-SIM_THRESHOLD = float(os.getenv("SIM_THRESHOLD", "0.65"))     # accept into group if sim >= τ
-LENIENCY_GAMMA = float(os.getenv("LENIENCY_GAMMA", "0.07"))   # don't undercut group's avg by > γ
-DEFAULT_GROUP_MAX_SIZE = int(os.getenv("DEFAULT_GROUP_MAX_SIZE", "8"))
-DROP_SENSITIVE = (os.getenv("DROP_SENSITIVE", "true").lower() == "true")  # exclude Age/Gender from similarity
 
+SIM_THRESHOLD     = float(os.getenv("SIM_THRESHOLD",     "0.65"))  # accept if sim >= τ
+LENIENCY_GAMMA    = float(os.getenv("LENIENCY_GAMMA",    "0.07"))  # don't undercut group avg by > γ
+DROP_SENSITIVE    = (os.getenv("DROP_SENSITIVE", "true").lower() == "true")  # exclude Age/Gender from similarity
+MAX_GROUP_FILTER  = True  # only consider groups that aren't full
+
+def _from_blob(b: bytes, dim: int) -> np.ndarray:
+    return np.frombuffer(b, dtype=np.float32, count=dim)
 
 def _l2(v: np.ndarray) -> np.ndarray:
     n = np.linalg.norm(v) + 1e-12
     return v / n
 
-def _to_blob(v: np.ndarray) -> bytes:
-    assert v.dtype == np.float32
-    return v.tobytes()
-
-def _from_blob(b: bytes, dim: int) -> np.ndarray:
-    return np.frombuffer(b, dtype=np.float32, count=dim)
-
-
-class GroupAssigner:
+class GroupRecommender:
     SENSITIVE_QUESTIONS = {"Age Group", "Gender"}
     QUESTION_WEIGHTS = {
         "What are you mainly looking for here?": 1.4,
@@ -53,18 +49,95 @@ class GroupAssigner:
         self.embed_model_name = embed_model
         self.drop_sensitive = drop_sensitive
 
+    # ---------- public ----------
+    def recommend(self, user_id: int) -> Dict[str, Any]:
+        """
+        Returns a read-only recommendation dict:
+          - decision: 'group' | 'new_group' | 'no_groups_configured'
+          - group_id: int | None
+          - score: float (best cosine)
+          - threshold: float
+          - reason: short string
+          - top_candidates: [(group_id, sim)]  (first 5 for transparency)
+        """
+        with self.Session() as sess:
+            # 1) get user embedding (read-only; try cache first; never write)
+            e, dim = self._get_user_embedding_readonly(sess, user_id)
+            if e is None:
+                # build on the fly (still read-only; do not store)
+                q_json = self._load_answers(sess, user_id)
+                if q_json is None:
+                    return {"decision":"no_groups_configured","group_id":None,"score":0.0,
+                            "threshold":SIM_THRESHOLD,"reason":"no_questionnaire","top_candidates":[]}
+                e, dim = self._embed_answers(q_json)
 
-    # ---- questionnaire parsing & embedding (reads existing answers from DB)
-    @staticmethod
-    def _normalize_answer(ans: Any) -> str:
-        if ans is None:
-            return ""
-        if isinstance(ans, list):
-            return "; ".join(str(x) for x in ans if x is not None)
-        return str(ans)
+            # 2) fetch candidate groups (active; not full if MAX_GROUP_FILTER)
+            candidates = self._fetch_candidates(sess)
+
+            if not candidates:
+                return {"decision":"no_groups_configured","group_id":None,"score":0.0,
+                        "threshold":SIM_THRESHOLD,"reason":"no_active_groups","top_candidates":[]}
+
+            # 3) score each group's centroid
+            sims = []
+            for row in candidates:
+                if row.centroid is None:
+                    continue
+                c = _from_blob(row.centroid, row.dim)
+                sims.append((row.id, float(np.dot(c, e)), float(row.avg_sim)))
+
+            if not sims:
+                return {"decision":"no_groups_configured","group_id":None,"score":0.0,
+                        "threshold":SIM_THRESHOLD,"reason":"no_group_centroids","top_candidates":[]}
+
+            sims.sort(key=lambda x: x[1], reverse=True)
+            top5 = [(gid, round(sim, 4)) for gid, sim, _ in sims[:5]]
+
+            best_gid, best_sim, best_avg = sims[0]
+
+            # 4) gating rules (read-only recommendation)
+            if best_sim >= SIM_THRESHOLD and best_sim >= (best_avg - LENIENCY_GAMMA):
+                return {
+                    "decision": "group",
+                    "group_id": int(best_gid),
+                    "score": float(best_sim),
+                    "threshold": SIM_THRESHOLD,
+                    "reason": "passes_threshold",
+                    "top_candidates": top5
+                }
+            else:
+                return {
+                    "decision": "new_group",
+                    "group_id": None,
+                    "score": float(best_sim),
+                    "threshold": SIM_THRESHOLD,
+                    "reason": "below_threshold" if best_sim < SIM_THRESHOLD else "undercuts_group_avg",
+                    "top_candidates": top5
+                }
+
+
+    def _get_user_embedding_readonly(self, sess, user_id: int) -> Tuple[Optional[np.ndarray], Optional[int]]:
+        row = sess.execute(text(
+            "SELECT model, dim, vec FROM user_questionnaire_embeddings WHERE user_id=:u"
+        ), {"u": user_id}).fetchone()
+        if not row:
+            return None, None
+        return _l2(_from_blob(row.vec, row.dim)), row.dim
+
+    def _load_answers(self, sess, user_id: int) -> Optional[Dict[str, Any]]:
+        row = sess.execute(text(
+            "SELECT answers FROM user_questionnaires WHERE user_id=:u"
+        ), {"u": user_id}).fetchone()
+        if not row:
+            return None
+        return row.answers if isinstance(row.answers, dict) else json.loads(row.answers)
+
+    def _embed_answers(self, q_json: Dict[str, Any]) -> Tuple[np.ndarray, int]:
+        text_blob = self._render_questionnaire_text(q_json)
+        v = self.embedder.encode([text_blob], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
+        return v, int(v.shape[0])
 
     def _render_questionnaire_text(self, q_json: Dict[str, Any]) -> str:
-        # expected shape: {"content":{"mood":[{"question":..., "answer":...|[...]}, ...]}}
         items: List[Dict[str, Any]] = q_json.get("content", {}).get("mood", [])
         lines: List[str] = []
         for item in items:
@@ -82,36 +155,19 @@ class GroupAssigner:
                     lines.append(line)
             else:
                 lines.append(line)
-        text_blob = "\n".join(lines).strip()
-        return text_blob if text_blob else "no questionnaire content provided"
+        txt = "\n".join(lines).strip()
+        return txt if txt else "no questionnaire content provided"
 
-    def _get_or_build_user_embedding(self, sess, user_id: int) -> Tuple[np.ndarray, int]:
-        row = sess.execute(text(
-            "SELECT model, dim, vec FROM user_questionnaire_embeddings WHERE user_id=:u"
-        ), {"u": user_id}).fetchone()
-        if row:
-            return _from_blob(row.vec, row.dim), row.dim
+    @staticmethod
+    def _normalize_answer(ans: Any) -> str:
+        if ans is None:
+            return ""
+        if isinstance(ans, list):
+            return "; ".join(str(x) for x in ans if x is not None)
+        return str(ans)
 
-        uq = sess.execute(text(
-            "SELECT answers FROM user_questionnaires WHERE user_id=:u"
-        ), {"u": user_id}).fetchone()
-        if uq is None:
-            raise ValueError("No questionnaire answers stored for this user_id.")
-
-        q_json = uq.answers if isinstance(uq.answers, dict) else json.loads(uq.answers)
-        text_blob = self._render_questionnaire_text(q_json)
-        vec = self.embedder.encode([text_blob], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
-        dim = int(vec.shape[0])
-
-        sess.execute(text(
-            "REPLACE INTO user_questionnaire_embeddings (user_id, model, dim, vec) "
-            "VALUES (:u, :m, :d, :v)"
-        ), {"u": user_id, "m": self.embed_model_name, "d": dim, "v": _to_blob(vec)})
-        return vec, dim
-
-    # ---- grouping core
-    def _fetch_candidate_groups(self, sess):
-        return sess.execute(text("""
+    def _fetch_candidates(self, sess):
+        base_sql = """
             SELECT g.id, COALESCE(gp.model, :m) AS model, gp.dim, gp.centroid,
                    gp.n_members, gp.avg_sim, g.max_size,
                    (SELECT COUNT(*) FROM chat_group_users cgu
@@ -119,71 +175,8 @@ class GroupAssigner:
             FROM chat_groups g
             LEFT JOIN group_profiles gp ON gp.group_id = g.id
             WHERE g.is_active = TRUE
-              AND COALESCE((SELECT COUNT(*) FROM chat_group_users cgu
-                            WHERE cgu.group_id = g.id AND cgu.is_active=TRUE), 0) < g.max_size
-        """), {"m": self.embed_model_name}).fetchall()
+        """
+        if MAX_GROUP_FILTER:
+            base_sql += " AND COALESCE((SELECT COUNT(*) FROM chat_group_users cgu WHERE cgu.group_id = g.id AND cgu.is_active=TRUE), 0) < g.max_size"
+        return sess.execute(text(base_sql), {"m": self.embed_model_name}).fetchall()
 
-    @staticmethod
-    def _choose_best_group(candidates, e: np.ndarray,
-                           sim_threshold: float, leniency_gamma: float) -> Optional[int]:
-        best_gid, best_sim, best_avg = None, -1.0, 0.0
-        for row in candidates:
-            if row.centroid is None:
-                continue
-            c = _from_blob(row.centroid, row.dim)
-            sim = float(np.dot(c, e))  # cosine (vectors are normalized)
-            if sim > best_sim:
-                best_gid, best_sim, best_avg = row.id, sim, row.avg_sim
-        if best_gid is not None and best_sim >= sim_threshold and best_sim >= (best_avg - leniency_gamma):
-            return best_gid
-        return None
-
-    def _create_new_group(self, sess, seed_vec: np.ndarray, dim: int) -> int:
-        gid = sess.execute(text(
-            "INSERT INTO chat_groups (group_name, is_active, max_size) VALUES (:n, TRUE, :ms)"
-        ), {"n": "Support Group", "ms": DEFAULT_GROUP_MAX_SIZE}).lastrowid
-        sess.execute(text(
-            "INSERT INTO group_profiles (group_id, model, dim, centroid, n_members, avg_sim) "
-            "VALUES (:g, :m, :d, :c, 0, 0.0)"
-        ), {"g": gid, "m": self.embed_model_name, "d": dim, "c": _to_blob(seed_vec)})
-        return gid
-
-    @staticmethod
-    def _add_member(sess, gid: int, uid: int):
-        sess.execute(text("""
-            INSERT IGNORE INTO chat_group_users (group_id, user_id, is_active)
-            VALUES (:g, :u, TRUE)
-        """), {"g": gid, "u": uid})
-
-    @staticmethod
-    def _update_centroid(sess, gid: int, e: np.ndarray):
-        row = sess.execute(text(
-            "SELECT dim, centroid, n_members, avg_sim FROM group_profiles WHERE group_id=:g FOR UPDATE"
-        ), {"g": gid}).fetchone()
-        if row is None:
-            return
-        c_old = _from_blob(row.centroid, row.dim)
-        n = row.n_members
-        sim_to_old = float(np.dot(c_old, e))
-        c_new = _l2((c_old * (n / (n + 1.0))) + (e * (1.0 / (n + 1.0))))
-        avg_sim_new = (row.avg_sim * n + sim_to_old) / (n + 1.0)
-        sess.execute(text(
-            "UPDATE group_profiles SET centroid=:c, n_members=:n2, avg_sim=:a WHERE group_id=:g"
-        ), {"c": _to_blob(c_new.astype(np.float32)), "n2": n + 1, "a": avg_sim_new, "g": gid})
-
-   
-
-
-    def assign(self, user_id: int,
-               sim_threshold: float = SIM_THRESHOLD,
-               leniency_gamma: float = LENIENCY_GAMMA) -> int:
-        with self.Session() as sess:
-            e, dim = self._get_or_build_user_embedding(sess, user_id)
-            candidates = self._fetch_candidate_groups(sess)
-            gid = self._choose_best_group(candidates, e, sim_threshold, leniency_gamma)
-            if gid is None:
-                gid = self._create_new_group(sess, e, dim)
-            self._add_member(sess, gid, user_id)
-            self._update_centroid(sess, gid, e)
-            sess.commit()
-            return gid
