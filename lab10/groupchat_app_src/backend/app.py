@@ -1,4 +1,7 @@
 import os
+import sys
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT)
 import asyncio
 import json
 from typing import Optional, List
@@ -14,7 +17,7 @@ from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
-
+from model.grouping import GroupAssigner
 from db import (
     SessionLocal, init_db, User, Message, ChatGroups, ChatGroupUsers,
     UserRole, TherapistProfile, UserQuestionnaire, MailboxMessage,
@@ -901,32 +904,31 @@ async def add_member(
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
-    # Must be in the group
-    stmt = select(ChatGroupUsers).where(
-        ChatGroupUsers.group_id == group_id,
-        ChatGroupUsers.user_id == token_data.user_id
-    )
-    if not (await session.execute(stmt)).scalar_one_or_none():
+    if token_data.role != UserRole.therapist:
         raise HTTPException(403)
+    
+    target_group = await session.get(ChatGroups, group_id)
+    if not target_group:
+        raise HTTPException(404)
 
-    new_user = (await session.execute(
+    new_member = (await session.execute(
         select(User).where(User.username == payload.username)
     )).scalar_one_or_none()
 
-    if not new_user:
+    if not new_member:
         raise HTTPException(404, "User not found")
 
     exists = (await session.execute(
         select(ChatGroupUsers).where(
             ChatGroupUsers.group_id == group_id,
-            ChatGroupUsers.user_id == new_user.id
+            ChatGroupUsers.user_id == new_member.id
         )
     )).scalar_one_or_none()
 
     if exists:
         raise HTTPException(400, "Already in group")
 
-    m = ChatGroupUsers(group_id=group_id, user_id=new_user.id, is_active=True)
+    m = ChatGroupUsers(group_id=group_id, user_id=new_member.id, is_active=True)
     session.add(m)
     await session.commit()
 
@@ -956,20 +958,25 @@ async def save_questionnaire(
 async def save_questionnaire(payload: QuestionnairePayload, token_data: TokenData = Depends(get_current_user_token), session: AsyncSession = Depends(get_db)):
     # Save questionnaire
     res = await session.execute(select(UserQuestionnaire).where(UserQuestionnaire.user_id == token_data.user_id))
-    existing = res.scalar_one_or_none()
+    questionnaire = res.scalar_one_or_none()
 
-    if existing:
-        existing.answers = payload.content
-        session.add(existing)
+    if questionnaire:
+        questionnaire.answers = payload.content
+        session.add(questionnaire)
     else:
-        new_q = UserQuestionnaire(
+        questionnaire = UserQuestionnaire(
             user_id = token_data.user_id,
             answers = payload.content
         )
-        session.add(new_q)
+        session.add(questionnaire)
+    await session.commit()
+    await session.refresh(questionnaire)
+
 
     # Get user info
     user = await session.get(User, token_data.user_id)
+    ga = GroupAssigner(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+    gid = ga.assign(token_data.user_id)
 
     # look for chosen therapist
     rel = await session.execute(select(UserTherapist).where(UserTherapist.user_id == token_data.user_id))
@@ -985,6 +992,7 @@ async def save_questionnaire(payload: QuestionnairePayload, token_data: TokenDat
             content={
                 "type": "questionnaire",
                 "user": user.username,
+                "group_id": gid,
                 "answers": payload.content
             }
         )
