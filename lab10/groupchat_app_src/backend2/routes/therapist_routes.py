@@ -181,7 +181,8 @@ async def therapist_list_users(
         )
         unread = (await session.execute(unread_stmt)).scalar()
         out.append({
-            "id": user.id, "username": user.username,
+            "id": user.id, 
+            "username": user.username,
             "prefer_name": profile.prefer_name if profile else None,
             "avatar_url": profile.avatar_url if profile else None,
             "unread": unread
@@ -233,7 +234,7 @@ async def get_public_therapist_profile(
     user, profile = row
 
     return {
-        "id": user.id,
+        "user_id": user.id,
         "avatar_url": profile.avatar_url,
         "prefer_name": profile.prefer_name if profile else "",
         "bio": profile.bio if profile else "",
