@@ -15,7 +15,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sentence_transformers import SentenceTransformer
 
-DEFAULT_DB_URL = "mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat"
+DEFAULT_DB_URL =  "sqlite+aiosqlite:////absolute/path/to/groupchat.db"
+
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
 SIM_THRESHOLD     = float(os.getenv("SIM_THRESHOLD",     "0.65"))  # accept if sim >= τ

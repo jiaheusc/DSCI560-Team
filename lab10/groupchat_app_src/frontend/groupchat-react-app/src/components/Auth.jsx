@@ -51,9 +51,11 @@ const Auth = () => {
         const ok = await login(u, p);
 
         if (ok) {
-            goNextByToken(token);
+            const newToken = localStorage.getItem("token");
+            goNextByToken(newToken);
         }
     };
+
 
     // SIGNUP → open modal
     const handleSignup = () => {
@@ -74,9 +76,11 @@ const Auth = () => {
         const ok = await signup(u, p);
 
         if (ok) {
-            goNextByToken(token);
+            const newToken = localStorage.getItem("token");
+            goNextByToken(newToken);
         }
     };
+
 
     // modal decline
     const handleDecline = () => {
