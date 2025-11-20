@@ -11,35 +11,32 @@ import { useAuth } from "../AuthContext";
 const Profile = () => {
   const { token } = useAuth();
 
+  // ALL HOOKS AT TOP LEVEL
   const [profile, setProfile] = useState({});
   const [edit, setEdit] = useState({});
   const [avatars, setAvatars] = useState([]);
-
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-
   const [success, setSuccess] = useState("");
   const [showAvatarPanel, setShowAvatarPanel] = useState(false);
 
   const load = async () => {
-  const p = await getMyProfile(token);
+    const p = await getMyProfile(token);
+    const cleaned = {
+      prefer_name: p.prefer_name || "",
+      bio: p.bio || "",
+      expertise: p.expertise || "",
+      years_experience: p.years_experience ?? "",
+      license_number: p.license_number || "",
+      avatar_url: p.avatar_url || ""
+    };
 
-  const cleaned = {
-    prefer_name: p.prefer_name || "",
-    bio: p.bio || "",
-    expertise: p.expertise || "",
-    years_experience: p.years_experience ?? "",
-    license_number: p.license_number || "",
-    avatar_url: p.avatar_url || ""
+    setProfile(cleaned);
+    setEdit(cleaned);
+
+    const av = await listAvatars(token);
+    setAvatars(av.avatars || []);
   };
-
-  setProfile(cleaned);
-  setEdit(cleaned);
-
-  const av = await listAvatars(token);
-  setAvatars(av.avatars);
-};
-
 
   useEffect(() => {
     load();
@@ -57,11 +54,18 @@ const Profile = () => {
   };
 
   const saveAvatar = async (url) => {
-    await updateAvatar(url, token);
-    toast("Avatar updated!");
-    load();
-    setShowAvatarPanel(false);
-  };
+  await updateProfile(
+    {
+      ...edit,
+      avatar_url: url
+    },
+    token
+  );
+  toast("Avatar updated!");
+  load();
+  setShowAvatarPanel(false);
+};
+
 
   const savePassword = async () => {
     try {
@@ -69,7 +73,7 @@ const Profile = () => {
       toast("Password updated!");
       setOldPassword("");
       setNewPassword("");
-    } catch (err) {
+    } catch {
       toast("❌ Wrong password or update failed");
     }
   };
@@ -97,15 +101,9 @@ const Profile = () => {
 
       {/* Avatar Panel */}
       {showAvatarPanel && (
-        <div
-          style={{
-            border: "1px solid #ccc",
-            padding: 20,
-            marginBottom: 20,
-            borderRadius: 8
-          }}
-        >
+        <div style={{ border: "1px solid #ccc", padding: 20, borderRadius: 8 }}>
           <h4>Select Avatar</h4>
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {avatars.map((url) => (
               <img
@@ -122,7 +120,7 @@ const Profile = () => {
               />
             ))}
           </div>
-          <br />
+
           <button onClick={() => setShowAvatarPanel(false)}>Close</button>
         </div>
       )}
@@ -149,17 +147,13 @@ const Profile = () => {
       <input
         type="number"
         value={edit.years_experience || ""}
-        onChange={(e) =>
-          setEdit({ ...edit, years_experience: e.target.value })
-        }
+        onChange={(e) => setEdit({ ...edit, years_experience: e.target.value })}
       />
 
       <label>License Number</label>
       <input
         value={edit.license_number || ""}
-        onChange={(e) =>
-          setEdit({ ...edit, license_number: e.target.value })
-        }
+        onChange={(e) => setEdit({ ...edit, license_number: e.target.value })}
       />
 
       <button onClick={saveProfile}>Save Profile</button>
@@ -183,7 +177,6 @@ const Profile = () => {
 
       <button onClick={savePassword}>Update Password</button>
 
-      {/* Toast */}
       {success && (
         <p
           style={{

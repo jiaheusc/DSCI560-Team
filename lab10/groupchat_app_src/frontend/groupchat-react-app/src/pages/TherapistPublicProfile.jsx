@@ -1,22 +1,33 @@
 import React, { useEffect, useState } from "react";
 import { getPublicTherapistProfile } from "../api";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "../AuthContext";
 
 const TherapistPublicProfile = () => {
   const { id } = useParams();
-  const { token } = useAuth();
   const navigate = useNavigate();
 
   const [info, setInfo] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const load = async () => {
-      const data = await getPublicTherapistProfile(id, token);
-      setInfo(data);
+      try {
+        const data = await getPublicTherapistProfile(id);  
+        setInfo(data);
+      } catch (err) {
+        setError(err.detail || "Unable to load therapist profile.");
+      }
     };
     load();
   }, [id]);
+
+  if (error)
+    return (
+      <div className="auth" style={{ padding: 20 }}>
+        <p style={{ color: "red" }}>{error}</p>
+        <button onClick={() => navigate(-1)}>← Back</button>
+      </div>
+    );
 
   if (!info) return <p style={{ padding: 20 }}>Loading...</p>;
 

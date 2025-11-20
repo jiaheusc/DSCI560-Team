@@ -9,8 +9,12 @@ const TherapistHome = () => {
   const [messages, setMessages] = useState([]);
 
   const load = async () => {
-    const data = await getMailbox(token);
-    setMessages(data);
+    try {
+      const data = await getMailbox(token);   // { messages: [...] }
+      setMessages(data.messages || []);
+    } catch (err) {
+      console.error("Mailbox load error:", err);
+    }
   };
 
   useEffect(() => {
@@ -23,29 +27,42 @@ const TherapistHome = () => {
     <div className="auth">
       <h2>Therapist Dashboard</h2>
 
-      {/* 🔥 Unread message alert */}
+      {/* 🔥 Unread alert */}
       {unreadCount > 0 && (
         <p style={{ color: "red", fontWeight: "bold" }}>
           🔴 You have {unreadCount} new message{unreadCount > 1 ? "s" : ""} in your mailbox!
         </p>
       )}
 
-      <button onClick={() => navigate("/profile")}>Edit Profile</button>
+      {/* Profile */}
+      <button onClick={() => navigate("/therapist/profile")}>
+        Edit Profile
+      </button>
 
+      {/* Chat */}
       <button onClick={() => navigate("/chat")}>Chat</button>
 
-      {/* 🔥 Mailbox button with unread badge */}
-      <button onClick={() => navigate("/mailbox")} style={{ position: "relative" }}>
+      {/* Mailbox with badge */}
+      <button
+        onClick={() => navigate("/mailbox")}
+        style={{ position: "relative" }}
+      >
         Mailbox
         {unreadCount > 0 && (
           <span
             style={{
+              position: "absolute",
+              top: "-4px",
+              right: "-4px",
+              width: "16px",
+              height: "16px",
+              borderRadius: "50%",
               background: "red",
               color: "white",
-              borderRadius: "50%",
-              padding: "2px 6px",
-              fontSize: 12,
-              marginLeft: 6
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "12px"
             }}
           >
             {unreadCount}

@@ -1,19 +1,28 @@
+// GroupSelect.jsx
 import React, { useEffect, useState } from "react";
 import { getChatGroups, createGroup } from "../api";
 import { useAuth } from "../AuthContext";
 
-const GroupSelect = ({ setView }) => {
+const GroupSelect = ({ setView, setSelectedGroupId }) => {
     const { token } = useAuth();
     const [groups, setGroups] = useState([]);
     const [name, setName] = useState("");
 
+    // -----------------------------
+    // Load all chat groups
+    // -----------------------------
     const loadGroups = async () => {
         const data = await getChatGroups(token);
-        setGroups(data);
+        setGroups(data.groups || []);   
     };
 
-    const create = async () => {
+    // -----------------------------
+    // Create new group
+    // -----------------------------
+    const handleCreate = async () => {
+        if (!name.trim()) return;
         await createGroup(name, token);
+        setName("");
         loadGroups();
     };
 
@@ -22,17 +31,30 @@ const GroupSelect = ({ setView }) => {
     }, []);
 
     return (
-        <div>
+        <div className="group-select-container">
             <h2>Select Group</h2>
 
+            {/* Group list */}
             {groups.map((g) => (
-                <div key={g.id} onClick={() => setView("chat")} className="group-item">
-                    {g.group_name}
+                <div
+                    key={g.id}
+                    className="group-item"
+                    onClick={() => {
+                        setSelectedGroupId(g.id);  
+                        setView("chat");
+                    }}
+                >
+                    {g.name}   
                 </div>
             ))}
 
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New group name" />
-            <button onClick={create}>Create</button>
+            {/* Create group */}
+            <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="New group name"
+            />
+            <button onClick={handleCreate}>Create</button>
         </div>
     );
 };

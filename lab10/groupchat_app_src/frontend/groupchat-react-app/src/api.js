@@ -9,39 +9,48 @@ export const api = async (path, method = "GET", body, token) => {
   });
 
   if (!res.ok) {
-  let text = await res.text();
-  let err;
+    let text = await res.text();
+    let err;
 
-  try {
-    err = JSON.parse(text);
-  } catch {
-    err = { detail: text };
+    try {
+      err = JSON.parse(text);
+    } catch {
+      err = { detail: text };
+    }
+
+    throw err;
   }
-
-  throw err;
-}
 
   return res.json();
 };
 
+// =====================
 // Questionnaire
+// =====================
 export const submitQuestionnaire = (answers, token) =>
   api("/user/questionnaire", "POST", { content: answers }, token);
 
+// =====================
 // Mailbox
-export const sendMail = (msg, token) =>
-  api("/mail/send", "POST", { message: msg }, token);
-
+// =====================
 export const getMailbox = (token) =>
   api("/mailbox", "GET", null, token);
 
 export const approveUser = (userId, token) =>
   api("/mailbox/approve", "POST", { user_id: userId }, token);
 
+export const markMailRead = (mailId, token) =>
+  api("/mailbox/read", "POST", { mail_id: mailId }, token);
+
+export const sendMail = (msg, token) =>
+  api("/mail/send", "POST", { message: msg }, token);
+
 export const replyMail = (to_user, message, token) =>
   api("/mail/reply", "POST", { to_user, message }, token);
 
-// Groups & Chat
+// =====================
+// Chat Groups & Messages
+// =====================
 export const getChatGroups = (token) =>
   api("/chat-groups", "GET", null, token);
 
@@ -51,34 +60,48 @@ export const getMessages = (groupId, token) =>
 export const sendMessageToGroup = (content, groupId, token) =>
   api("/messages", "POST", { content, group_id: groupId }, token);
 
-// Therapist profile
-export const getMyProfile = (token) =>
+// =====================
+// Therapist Profile (private)
+// =====================
+export const getMyProfile = async (token) => 
   api("/therapist/profile/me", "GET", null, token);
 
-export const updateProfile = (payload, token) =>
+export const updateProfile = async (payload, token) => 
   api("/therapist/profile/update", "POST", payload, token);
 
-// List therapists
-export const listTherapists = (token) =>
-  api("/therapists", "GET", null, token);
 
-// List avatars
+
+// =====================
+// Therapist: List & Public Profile
+// =====================
+export const listTherapists = (token) =>
+  api("/therapist/therapists", "GET", null, token);
+
+// Public API
+export const getPublicTherapistProfile = (id) =>
+  api(`/therapist/profile/${id}`, "GET");
+
+// =====================
+// User Profile (user_r)
+// =====================
+export const getMyUserProfile = (token) =>
+  api("/user/profile/me", "GET", null, token);
+
+export const createUserProfile = (payload, token) =>
+  api("/user/profile", "POST", payload, token);
+
+export const updateUserProfile = (payload, token) =>
+  api("/user/profile/update", "POST", payload, token);
+
+// Therapist assignment
+export const assignTherapist = (therapist_id, token) =>
+  api("/user/me/assign-therapist", "POST", { therapist_id }, token);
+
+// =====================
+// Avatars & Password
+// =====================
 export const listAvatars = (token) =>
   api("/avatars", "GET", null, token);
 
-// Update avatar
-export const updateAvatar = (url, token) =>
-  api("/users/avatar", "POST", { avatar_url: url }, token);
-
-// Change password
 export const changePassword = (old_password, new_password, token) =>
   api("/auth/change-password", "POST", { old_password, new_password }, token);
-
-export const markMailRead = (mailId, token) =>
-  api("/mailbox/read", "POST", { mail_id: mailId }, token);
-
-export const getPublicTherapistProfile = (id, token) =>
-  api(`/therapist/profile/${id}`, "GET", null, token);
-
-export const assignTherapist = (therapist_id, token) =>
-  api("/users/me/assign-therapist", "POST", { therapist_id }, token);

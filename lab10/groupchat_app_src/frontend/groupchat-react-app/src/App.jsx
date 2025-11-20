@@ -8,60 +8,87 @@ import UserHome from "./components/UserHome";
 import TherapistHome from "./components/TherapistHome";
 import Mailbox from "./components/Mailbox";
 import Chat from "./components/Chat";
-import Profile from "./components/Profile";
-import TherapistPublicProfile from "./pages/TherapistPublicProfile";
 
+import Profile from "./components/Profile";                 // therapist private profile
+import TherapistPublicProfile from "./pages/TherapistPublicProfile";
+import UserProfile from "./pages/UserProfile";
 
 const App = () => {
   const { token, role } = useAuth();
 
   const requireAuth = (element) => {
-    return token ? element : <Navigate to="/login" />;
+    if (!token) return <Navigate to="/login" />;
+    return element;
+  };
+
+  const requireRole = (element, required) => {
+    if (!token) return <Navigate to="/login" />;
+    if (role !== required) return <Navigate to="/login" />;
+    return element;
   };
 
   return (
     <BrowserRouter>
       <div className="page-container">
-
         <Routes>
+
           {/* Default */}
           <Route path="/" element={<Navigate to="/login" />} />
 
-          {/* Login page */}
+          {/* Login */}
           <Route path="/login" element={<Auth />} />
 
-          {/* Questionnaire (user fills after signup) */}
+          {/* Questionnaire (user only) */}
           <Route
             path="/questionnaire"
-            element={requireAuth(<Questionnaire />)}
+            element={requireRole(<Questionnaire />, "user")}
           />
 
           {/* USER HOME */}
           <Route
             path="/user"
-            element={requireAuth(
-              role === "user" ? <UserHome /> : <Navigate to="/login" />
-            )}
+            element={requireRole(<UserHome />, "user")}
+          />
+
+          {/* USER PROFILE */}
+          <Route
+            path="/user/profile"
+            element={requireRole(<UserProfile />, "user")}
           />
 
           {/* THERAPIST HOME */}
           <Route
             path="/therapist"
-            element={requireAuth(
-              role === "therapist" ? <TherapistHome /> : <Navigate to="/login" />
-            )}
+            element={requireRole(<TherapistHome />, "therapist")}
           />
-          {/* Public therapist profile */}
-          <Route path="/therapist-profile/:id" element={<TherapistPublicProfile />} />
-          {/* Shared pages */}
-          <Route path="/mailbox" element={requireAuth(<Mailbox />)} />
-          <Route path="/chat" element={requireAuth(<Chat />)} />
-          <Route path="/profile" element={requireAuth(<Profile />)} />
 
-          {/* Not found → redirect */}
+          {/* THERAPIST private profile (edit profile) */}
+          <Route
+            path="/therapist/profile"
+            element={requireRole(<Profile />, "therapist")}
+          />
+
+          {/* PUBLIC therapist profile (view only) */}
+          <Route
+            path="/therapist-profile/:id"
+            element={<TherapistPublicProfile />}
+          />
+
+          {/* Mailbox (shared by both) */}
+          <Route
+            path="/mailbox"
+            element={requireAuth(<Mailbox />)}
+          />
+
+          {/* Chat (shared by both) */}
+          <Route
+            path="/chat"
+            element={requireAuth(<Chat />)}
+          />
+
+          {/* Not found */}
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
-
       </div>
     </BrowserRouter>
   );

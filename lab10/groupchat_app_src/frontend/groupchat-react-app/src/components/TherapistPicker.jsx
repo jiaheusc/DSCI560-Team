@@ -1,23 +1,34 @@
 import React, { useEffect, useState } from "react";
-import { listTherapists, assignTherapist } from "../api";
+import {
+  listTherapists,
+  assignTherapist,
+  getPublicTherapistProfile
+} from "../api";
 import { useAuth } from "../AuthContext";
 
 const TherapistPicker = ({ onClose, onChosen }) => {
   const { token } = useAuth();
   const [therapists, setTherapists] = useState([]);
-  const [viewProfile, setViewProfile] = useState(null); // profile modal
+  const [viewProfile, setViewProfile] = useState(null);
 
   useEffect(() => {
     const load = async () => {
       const data = await listTherapists(token);
-      setTherapists(data.therapists);
+      setTherapists(data.therapists || []);
     };
     load();
   }, []);
 
+  // -------- SELECT THERAPIST ----------
   const choose = async (id) => {
     await assignTherapist(id, token);
     onChosen();
+  };
+
+  // -------- LOAD PROFILE ----------
+  const openProfile = async (t) => {
+    const full = await getPublicTherapistProfile(t.user_id, token);
+    setViewProfile(full);
   };
 
   return (
@@ -26,23 +37,26 @@ const TherapistPicker = ({ onClose, onChosen }) => {
 
         <h3>Select a Therapist</h3>
 
-        {therapists.map(t => (
-          <div key={t.id} className="therapist-row">
+        {therapists.map((t) => (
+          <div key={t.user_id} className="therapist-row">
             <span
-              onClick={() => setViewProfile(t)}
-              style={{ color: "blue", textDecoration: "underline", cursor: "pointer" }}
+              style={{
+                color: "blue",
+                textDecoration: "underline",
+                cursor: "pointer"
+              }}
+              onClick={() => openProfile(t)}
             >
               {t.prefer_name || t.username}
             </span>
 
-            <button onClick={() => choose(t.id)}>Select</button>
+            <button onClick={() => choose(t.user_id)}>Select</button>
           </div>
         ))}
 
         <button onClick={onClose} className="close-btn">Close</button>
 
-
-        {/* ================= PROFILE MODAL ================ */}
+        {/* ============= PROFILE MODAL ================= */}
         {viewProfile && (
           <div className="modal-overlay">
             <div className="modal-window small">
@@ -69,14 +83,11 @@ const TherapistPicker = ({ onClose, onChosen }) => {
               />
 
               <p><strong>Expertise:</strong> {viewProfile.expertise || "N/A"}</p>
-              <p><strong>Experience:</strong> {viewProfile.years_experience}</p>
+              <p><strong>Experience:</strong> {viewProfile.years_experience || "N/A"}</p>
               <p><strong>License:</strong> {viewProfile.license_number || "N/A"}</p>
               <p><strong>Bio:</strong><br /> {viewProfile.bio || "No bio yet."}</p>
 
-              <button
-                style={{ marginTop: 10 }}
-                onClick={() => choose(viewProfile.id)}
-              >
+              <button style={{ marginTop: 10 }} onClick={() => choose(viewProfile.id)}>
                 Select This Therapist
               </button>
             </div>

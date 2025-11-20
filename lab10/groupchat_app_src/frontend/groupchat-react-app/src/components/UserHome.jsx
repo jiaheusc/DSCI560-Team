@@ -1,68 +1,79 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
-import { getMailbox } from "../api";
-import { useNavigate } from "react-router-dom";
+import TherapistPicker from "./TherapistPicker";
+import { assignTherapist, getMailbox, sendMail } from "../api";
 
 const UserHome = () => {
   const { token, logout } = useAuth();
-  const navigate = useNavigate();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [needsTherapist, setNeedsTherapist] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
-  // Load mailbox unread count
-  const loadUnread = async () => {
+  // ======= STEP 1: Check if user has therapist =======
+  const checkTherapist = async () => {
     try {
-      const data = await getMailbox(token);
-      const unread = data.filter((m) => !m.is_read).length;
-      setUnreadCount(unread);
+      const res = await fetch("/api/user/me/therapist", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      if (!data.has_therapist) {
+        setNeedsTherapist(true);
+        setShowPicker(true);  // auto open modal
+      } else {
+        setNeedsTherapist(false);
+        setShowPicker(false);
+      }
+
     } catch (err) {
-      console.error("Mailbox error:", err);
+      console.error("Failed to check therapist:", err);
     }
   };
 
   useEffect(() => {
-    loadUnread();
-  }, []);
+    if (token) checkTherapist();
+  }, [token]);
+
+  // ======= When user selects therapist from modal =======
+  const handleTherapistChosen = () => {
+    setShowPicker(false);
+    setNeedsTherapist(false);
+  };
 
   return (
     <div className="auth">
+
       <h2>User Home</h2>
 
-      <p>Your questionnaire has been submitted. Waiting for therapist approval.</p>
-
-      {/* 🔥 Unread message banner */}
-      {unreadCount > 0 && (
-        <p style={{ color: "red", fontWeight: "bold" }}>
-          You have {unreadCount} unread message{unreadCount > 1 ? "s" : ""} in your mailbox!
-        </p>
+      {/* Auto-popup therapist picker */}
+      {showPicker && (
+        <TherapistPicker
+          onClose={() => setShowPicker(false)}
+          onChosen={handleTherapistChosen}
+        />
       )}
 
-      {/* 📬 Mailbox button with red dot */}
-      <button
-        onClick={() => navigate("/mailbox")}
-        style={{ position: "relative" }}
-      >
-        Mailbox
-        {unreadCount > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: "-5px",
-              right: "-5px",
-              width: "12px",
-              height: "12px",
-              borderRadius: "50%",
-              background: "red",
-              display: "inline-block",
-            }}
-          ></span>
-        )}
-      </button>
+      {needsTherapist ? (
+        <p style={{ color: "red", marginBottom: 20 }}>
+          You must select a therapist before entering the chat.
+        </p>
+      ) : (
+        <p>Your questionnaire has been submitted.</p>
+      )}
 
-      {/* Chat */}
-      <button onClick={() => navigate("/chat")}>Chat</button>
+      {/* Buttons visible only after therapist selected */}
+      {!needsTherapist && (
+        <>
+          <button onClick={() => (window.location.href = "/mailbox")}>
+            Mailbox
+          </button>
 
-      {/* Logout */}
-      <button style={{ background: "#ccc" }} onClick={logout}>
+          <button onClick={() => (window.location.href = "/chat")}>
+            Chat
+          </button>
+        </>
+      )}
+
+      <button style={{ background: "#ccc", marginTop: 20 }} onClick={logout}>
         Log out
       </button>
     </div>
