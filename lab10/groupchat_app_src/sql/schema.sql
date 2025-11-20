@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS user_questionnaires (
     CONSTRAINT fk_questionnaire_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE user_therapists (
+CREATE TABLE IF NOT EXISTS user_therapists (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
     therapist_id INT NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE user_therapists (
     CONSTRAINT fk_ut_therapist FOREIGN KEY (therapist_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE user_therapist_chats (
+CREATE TABLE IF NOT EXISTS user_therapist_chats (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     therapist_id INT NOT NULL,
@@ -112,7 +112,7 @@ CREATE TABLE user_therapist_chats (
     CONSTRAINT fk_chat_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE mailbox_messages (
+CREATE TABLE IF NOT EXISTS mailbox_messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
     from_user INT NULL, 
     to_user INT NOT NULL,
