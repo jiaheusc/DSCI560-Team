@@ -76,8 +76,9 @@ class GroupRecommender:
             candidates = self._fetch_candidates(sess)
 
             if not candidates:
-                return {"decision":"no_groups_configured","group_id":None,"score":0.0,
-                        "threshold":SIM_THRESHOLD,"reason":"no_active_groups","top_candidates":[]}
+                 return {"decision":"new_group","group_id":None,"score":0.0,
+                         "threshold":SIM_THRESHOLD,"reason":"no_active_groups","top_candidates":[]}
+
 
             # 3) score each group's centroid
             sims = []

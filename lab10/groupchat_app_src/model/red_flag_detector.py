@@ -45,7 +45,7 @@ def _get_hate_model() -> StaticModelPipeline:
     global _HATE_MODEL
     if _HATE_MODEL is None:
         _HATE_MODEL = StaticModelPipeline.from_pretrained(
-            "enguard/tiny-guard-8m-en-prompt-hate-binary-moderation"
+            "enguard/tiny-guard-8m-en-prompt-hate-speech-binary-moderation"
         )
     return _HATE_MODEL
 
@@ -104,4 +104,16 @@ def batch_check_both(texts: List[str]) -> List[Dict[str, str]]:
 
     return [{"self_harm": s, "hate": h} for s, h in zip(out_self, out_hate)]
 
-
+"""
+if __name__ == "__main__":
+    samples = [
+        "I want to hurt myself.",
+        "You don't belong here.",
+        "I'm dying to see that movie!",
+        "   ",
+        "We should kick them out.",
+        "I feel unsafe; who can I call?",
+    ]
+    for s, res in zip(samples, batch_check_both(samples)):
+        print(f"{res} | {s}")
+        """
