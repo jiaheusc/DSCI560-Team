@@ -90,7 +90,6 @@ CREATE TABLE IF NOT EXISTS user_questionnaires (
     CONSTRAINT fk_questionnaire_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- new tables
 CREATE TABLE user_therapists (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
@@ -113,3 +112,35 @@ CREATE TABLE user_therapist_chats (
     CONSTRAINT fk_chat_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE mailbox_messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    from_user INT NULL, 
+    to_user INT NOT NULL,
+    content JSON NULL DEFAULT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_mail_from FOREIGN KEY (from_user) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_mail_to FOREIGN KEY (to_user) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_questionnaire_embeddings (
+  user_id INT PRIMARY KEY,
+  model VARCHAR(128) NOT NULL,
+  dim INT NOT NULL,
+  vec LONGBLOB NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_uqe_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS group_profiles (
+  group_id INT PRIMARY KEY,
+  model VARCHAR(128) NOT NULL,
+  dim INT NOT NULL,
+  centroid LONGBLOB NOT NULL,   -- float32 bytes, keep vectors L2-normalized
+  n_members INT NOT NULL,
+  avg_sim FLOAT NOT NULL,       -- running mean cosine-to-centroid
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_gp_group FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX IF NOT EXISTS idx_active_created ON chat_groups (is_active, created_at);
