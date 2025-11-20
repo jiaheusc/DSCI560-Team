@@ -11,3 +11,4 @@ cryptography
 sentence_transformers
 numpy
 pymysql
+model2vec

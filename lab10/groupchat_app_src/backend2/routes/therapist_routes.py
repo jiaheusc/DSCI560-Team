@@ -66,6 +66,18 @@ async def create_therapist_profile(
     session.add(profile)
     await session.commit()
     await session.refresh(profile)
+    user = await session.get(User, token_data.user_id)
+
+    profile = {
+        "user_id": user.id,
+        "username": user.username,
+        "avatar_url": profile.avatar_url,
+        "prefer_name": profile.prefer_name,
+        "bio": profile.bio,
+        "expertise": profile.expertise,
+        "years_experience": profile.years_experience,
+        "license_number": profile.license_number,
+    }
     return {"ok": True, "profile": profile}
 
 
@@ -92,6 +104,19 @@ async def update_therapist_profile(
     session.add(profile)
     await session.commit()
     await session.refresh(profile)
+
+    user = await session.get(User, token_data.user_id)
+
+    profile = {
+        "user_id": user.id,
+        "username": user.username,
+        "avatar_url": profile.avatar_url,
+        "prefer_name": profile.prefer_name,
+        "bio": profile.bio,
+        "expertise": profile.expertise,
+        "years_experience": profile.years_experience,
+        "license_number": profile.license_number,
+    }
 
     return {"ok": True, "profile": profile}
 

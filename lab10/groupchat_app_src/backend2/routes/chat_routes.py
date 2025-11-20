@@ -7,6 +7,7 @@ from websocket_manager import ConnectionManager
 from llm import chat_completion
 import asyncio
 from utils.security import encrypt, decrypt
+from model.red_flag_detector import RedFlagDetector
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, 
     ChatGroupCreate, ChatGroupListResponse, ChatGroupUpdate, 
@@ -229,33 +230,38 @@ async def get_group_messages(
 @router.post("/messages")
 async def post_group_message(
     payload: MessagePayload,
-    token_data: TokenData = Depends(get_current_user_token),
+    # token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
     # check membership
-    stmt = select(ChatGroupUsers).where(
-        ChatGroupUsers.group_id == payload.group_id,
-        ChatGroupUsers.user_id == token_data.user_id,
-        ChatGroupUsers.is_active == True
-    )
-    if not (await session.execute(stmt)).scalar_one_or_none():
-        raise HTTPException(403)
+    # stmt = select(ChatGroupUsers).where(
+    #     ChatGroupUsers.group_id == payload.group_id,
+    #     ChatGroupUsers.user_id == token_data.user_id,
+    #     ChatGroupUsers.is_active == True
+    # )
+    # if not (await session.execute(stmt)).scalar_one_or_none():
+    #     raise HTTPException(403)
 
-    m = Message(
-        user_id=token_data.user_id,
-        content=encrypt(payload.content),
-        is_bot=False,
-        group_id=payload.group_id
-    )
-    session.add(m)
-    await session.commit()
-    await session.refresh(m)
+    # check proper language
+    det = RedFlagDetector(threshold=0.5)
+    print(f"content: {payload.content}")
+    print(det.detect(payload.content))
+    # m = Message(
+    #     user_id=token_data.user_id,
+    #     content=encrypt(payload.content),
+    #     is_bot=False,
+    #     group_id=payload.group_id
+    # )
+    # session.add(m)
+    # await session.commit()
+    # await session.refresh(m)
 
-    await broadcast_message(session, m, payload.group_id)
+    # await broadcast_message(session, m, payload.group_id)
 
-    asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
+    # asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
 
-    return {"ok": True, "id": m.id}
+    # return {"ok": True, "id": m.id}
+    return {"ok": True}
 
 
 @router.websocket("/ws")
