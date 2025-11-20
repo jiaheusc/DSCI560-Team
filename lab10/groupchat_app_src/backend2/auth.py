@@ -21,12 +21,18 @@ class TokenData(BaseModel):
     username: str
     role: str
     user_id: int
-
 def get_password_hash(password: str) -> str:
+    # bcrypt hard limit — must truncate
+    if len(password.encode("utf-8")) > 72:
+        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password: str, password_hash: str) -> bool:
+    if len(plain_password.encode("utf-8")) > 72:
+        plain_password = plain_password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
     return pwd_context.verify(plain_password, password_hash)
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

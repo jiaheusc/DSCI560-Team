@@ -9,7 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [authMsg, setAuthMsg] = useState("");   // ⭐ 登录/注册错误消息
 
   // ----------------------------------
-  // SAVE AUTH (统一封装)
+  // SAVE AUTH 
   // ----------------------------------
   const saveAuth = (jwtToken, userRole) => {
     const payload = parseJwt(jwtToken);
@@ -62,7 +62,7 @@ export const AuthProvider = ({ children }) => {
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password,prefer_name: username })
       });
 
       if (!res.ok) {
