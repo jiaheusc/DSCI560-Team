@@ -230,38 +230,41 @@ async def get_group_messages(
 @router.post("/messages")
 async def post_group_message(
     payload: MessagePayload,
-    # token_data: TokenData = Depends(get_current_user_token),
+    token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
     # check membership
-    # stmt = select(ChatGroupUsers).where(
-    #     ChatGroupUsers.group_id == payload.group_id,
-    #     ChatGroupUsers.user_id == token_data.user_id,
-    #     ChatGroupUsers.is_active == True
-    # )
-    # if not (await session.execute(stmt)).scalar_one_or_none():
-    #     raise HTTPException(403)
+    stmt = select(ChatGroupUsers).where(
+        ChatGroupUsers.group_id == payload.group_id,
+        ChatGroupUsers.user_id == token_data.user_id,
+        ChatGroupUsers.is_active == True
+    )
+    if not (await session.execute(stmt)).scalar_one_or_none():
+        raise HTTPException(403)
 
     # check proper language
     det = RedFlagDetector(threshold=0.5)
+    result = det.detect(payload.content)
     print(f"content: {payload.content}")
-    print(det.detect(payload.content))
-    # m = Message(
-    #     user_id=token_data.user_id,
-    #     content=encrypt(payload.content),
-    #     is_bot=False,
-    #     group_id=payload.group_id
-    # )
-    # session.add(m)
-    # await session.commit()
-    # await session.refresh(m)
+    print(result)
 
-    # await broadcast_message(session, m, payload.group_id)
+    if result[0] == False:
+        m = Message(
+            user_id=token_data.user_id,
+            content=encrypt(payload.content),
+            is_bot=False,
+            group_id=payload.group_id
+        )
+        session.add(m)
+        await session.commit()
+        await session.refresh(m)
 
-    # asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
+        await broadcast_message(session, m, payload.group_id)
 
-    # return {"ok": True, "id": m.id}
-    return {"ok": True}
+        asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
+
+        return {"ok": True, "id": m.id}
+    return {"ok": False}
 
 
 @router.websocket("/ws")
