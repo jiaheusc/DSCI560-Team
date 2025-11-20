@@ -13,112 +13,95 @@
 
 
 
-# Minimal red-flag detector using Model2Vec (no thresholds, no probs).
-# Label semantics (from the model): FAIL -> self-harm content, PASS -> non-self-harm.
 
-from typing import List
+
+# - Self-harm: enguard/tiny-guard-4m-en-prompt-self-harm-binary-moderation
+# - Hate     : enguard/tiny-guard-4m-en-prompt-hate-binary-moderation
+#
+#   detect_self_harm(text) -> 'PASS' | 'FAIL'
+#   detect_hate(text)      -> 'PASS' | 'FAIL'
+#   check_both(text)       -> {'self_harm': 'PASS|FAIL', 'hate': 'PASS|FAIL'}
+#   batch_check_both(texts)-> [{'self_harm':..., 'hate':...}, ...]
+#
+# Install:
+#   pip install "model2vec[inference]" torch
+
+from typing import List, Dict
 from model2vec.inference import StaticModelPipeline
 
-class RedFlagDetector:
-    def __init__(
-        self,
-        repo_id: str = "enguard/tiny-guard-4m-en-prompt-self-harm-binary-moderation",
-    ) -> None:
-        self.model = StaticModelPipeline.from_pretrained(repo_id)
 
-    def detect(self, text: str) -> str:
-        """
-        Return the model's label for a single text: 'PASS' or 'FAIL'.
-        """
-        txt = (text or "").strip()
-        if not txt:
-            return "PASS"  # minimal default for empty input
-        return self.model.predict([txt])[0]
+_SELF_HARM_MODEL = None
+_HATE_MODEL = None
 
-    def batch_detect(self, texts: List[str]) -> List[str]:
-        """
-        Return a list of labels ('PASS' or 'FAIL') for a list of texts.
-        """
-        if not texts:
-            return []
-        cleaned = [(t or "").strip() for t in texts]
-        # Empty strings treated as 'PASS' without sending to the model
-        to_run = [t for t in cleaned if t]
-        labels = self.model.predict(to_run) if to_run else []
-        it = iter(labels)
-        out = [next(it) if t else "PASS" for t in cleaned]
-        return out
+def _get_self_harm_model() -> StaticModelPipeline:
+    global _SELF_HARM_MODEL
+    if _SELF_HARM_MODEL is None:
+        _SELF_HARM_MODEL = StaticModelPipeline.from_pretrained(
+            "enguard/tiny-guard-8m-en-prompt-self-harm-binary-moderation"
+        )
+    return _SELF_HARM_MODEL
+
+def _get_hate_model() -> StaticModelPipeline:
+    global _HATE_MODEL
+    if _HATE_MODEL is None:
+        _HATE_MODEL = StaticModelPipeline.from_pretrained(
+            "enguard/tiny-guard-8m-en-prompt-hate-binary-moderation"
+        )
+    return _HATE_MODEL
 
 
-"""
+def detect_self_harm(text: str) -> str:
+    """
+    Return 'PASS' or 'FAIL' from the self-harm model.
+    Empty/whitespace is treated as 'PASS'.
+    """
+    t = (text or "").strip()
+    if not t:
+        return "PASS"
+    return _get_self_harm_model().predict([t])[0]
 
-det = RedFlagDetector()
+def detect_hate(text: str) -> str:
+    """
+    Return 'PASS' or 'FAIL' from the hate model.
+    Empty/whitespace is treated as 'PASS'.
+    """
+    t = (text or "").strip()
+    if not t:
+        return "PASS"
+    return _get_hate_model().predict([t])[0]
 
-tests = [
-    # --- CLEAR SELF-HARM INTENT ---
-    "I want to kill myself.",
-    "I feel like hurting myself tonight.",
-    "Sometimes I think about ending my life.",
-    "I cut myself again last night.",
-    "There’s no reason to live anymore.",
+def check_both(text: str) -> Dict[str, str]:
+    """
+    Check both categories for a single string.
+    Returns {'self_harm': 'PASS|FAIL', 'hate': 'PASS|FAIL'}.
+    """
+    return {
+        "self_harm": detect_self_harm(text),
+        "hate": detect_hate(text),
+    }
 
-    # --- MODERATE / AMBIGUOUS RISK ---
-    "I wish I could just disappear.",
-    "I can’t go on like this.",
-    "I’m not safe with myself right now.",
-    "I keep thinking about self-harm.",
-    "Part of me wants to die, but I’m scared.",
+def batch_check_both(texts: List[str]) -> List[Dict[str, str]]:
+    """
+    Batch version for efficiency: runs each model once across the non-empty subset,
+    then stitches results back to the original order.
+    """
+    if not texts:
+        return []
 
-    # --- NEGATIONS / DENIAL (should be PASS) ---
-    "I am NOT going to hurt myself.",
-    "I used to self-harm but I don’t anymore.",
-    "I sometimes think about suicide, but I have no plan.",
-    "I had suicidal thoughts before; not now.",
-    "I’m safe and I won’t do anything to myself.",
+    cleaned = [(x or "").strip() for x in texts]
+    idx = [i for i, s in enumerate(cleaned) if s]
 
-    # --- THIRD-PERSON / REPORTING ---
-    "My friend said he wants to kill himself.",
-    "They told me they might hurt themselves.",
-    "Someone on the forum posted about ending their life.",
-    "I’m supporting a roommate who has suicidal thoughts.",
-    "I’m worried my sister is self-harming.",
+    out_self: List[str] = ["PASS"] * len(cleaned)
+    out_hate: List[str] = ["PASS"] * len(cleaned)
 
-    # --- EMOTIONAL BUT NON–SELF-HARM (should be PASS) ---
-    "I’m extremely stressed about exams.",
-    "I feel sad and lonely lately.",
-    "I need coping tips for anxiety.",
-    "I had a panic attack yesterday; what can I do?",
-    "Looking for resources to manage depression.",
+    if idx:
+        non_empty = [cleaned[i] for i in idx]
+        sh_labels = _get_self_harm_model().predict(non_empty)
+        ht_labels = _get_hate_model().predict(non_empty)
+        for k, i in enumerate(idx):
+            out_self[i] = sh_labels[k]
+            out_hate[i] = ht_labels[k]
 
-    # --- IDIOMS / FIGURATIVE LANGUAGE (edge cases) ---
-    "That lecture was so boring I wanted to die (joking).",
-    "Ugh I’m dead after that workout",
-    "This project is killing me (figuratively).",
-    "I could just die of embarrassment.",
-    "I’m dying to see the new movie.",
+    return [{"self_harm": s, "hate": h} for s, h in zip(out_self, out_hate)]
 
-    # --- EMPTY / WHITESPACE / SHORT ---
-    "",
-    "   ",
-    "ok",
-    "help",
-    "hi",
 
-    # --- OBFUSCATED / SLANG (edge) ---
-    "kys (I don’t mean it, I’m quoting what someone said).",
-    "I kinda wanna un-alive myself.",
-    "Thinking of s-h.",
-    "Wanna end it all fr.",
-    "S/h crossed my mind.",
-
-    # --- SAFETY-PLANNING / SEEKING HELP ---
-    "I feel unsafe; how do I make a safety plan?",
-    "Who can I call if I feel suicidal?",
-    "What are warning signs of self-harm?",
-    "How do I talk to a friend about suicidal thoughts?",
-    "How to find a crisis hotline?"
-]
-
-for t in tests:
-    print(f"{det.detect(t):5} | {t}")
-"""
