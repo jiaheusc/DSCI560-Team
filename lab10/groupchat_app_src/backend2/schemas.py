@@ -186,6 +186,14 @@ class MailMarkReadPayload(BaseModel):
 class MailApprovePayload(BaseModel):
     user_id: int
 
+class MailSendPayload(BaseModel):
+    target_id: int
+    message: str
+
+class MailSendSuccessResponse(BaseModel):
+    ok: bool = True
+    mail_id: int
+
 class MailboxMessageResponse(BaseModel):
     id: int
     from_user: Optional[int]

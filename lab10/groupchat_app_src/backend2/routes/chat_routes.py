@@ -1,3 +1,4 @@
+from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -7,7 +8,7 @@ from websocket_manager import ConnectionManager
 from llm import chat_completion
 import asyncio
 from utils.security import encrypt, decrypt
-from model.red_flag_detector import RedFlagDetector
+from model.red_flag_detector import check_both, batch_check_both
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, 
     ChatGroupCreate, ChatGroupListResponse, ChatGroupUpdate, 
@@ -72,6 +73,7 @@ async def maybe_answer_with_llm(session: AsyncSession, content: str, group_id: i
 ###
     # routers
 ###
+MAX_SIZE = 10
 
 # create a new group
 @router.post("/chat-groups")
@@ -94,7 +96,16 @@ async def create_group(
         missing = [n for n in payload.usernames if n not in found]
         raise HTTPException(404, f"Users not found: {missing}")
 
-    group = ChatGroups(group_name=payload.group_name, is_active=True)
+    initial_member_count = len(users)
+
+    if initial_member_count >= MAX_SIZE:
+        raise HTTPException(400, f"Group is full. Max size is {MAX_SIZE}")
+    
+    group = ChatGroups(
+        group_name=payload.group_name, 
+        current_size=initial_member_count, 
+        is_active=True
+    )
     session.add(group)
     await session.flush()
 
@@ -109,7 +120,7 @@ async def create_group(
     return group.id
 
 # add a member into a group
-@router.post("/chat-groups/{group_id}/members")
+@router.post("/chat-groups/{group_id}/member")
 async def add_member(
     group_id: int,
     payload: MemberAdd,
@@ -123,6 +134,9 @@ async def add_member(
     if not target_group:
         raise HTTPException(404)
 
+    if target_group.current_size >= target_group.max_size:
+        raise HTTPException(400, f"Group is full. Max size is {target_group.max_size}")
+    
     new_member = (await session.execute(
         select(User).where(User.username == payload.username)
     )).scalar_one_or_none()
@@ -142,6 +156,10 @@ async def add_member(
 
     m = ChatGroupUsers(group_id=group_id, user_id=new_member.id, is_active=True)
     session.add(m)
+    
+    
+    target_group.current_size += 1
+    session.add(target_group)
     await session.commit()
 
     return {"ok": True}
@@ -243,28 +261,31 @@ async def post_group_message(
         raise HTTPException(403)
 
     # check proper language
-    det = RedFlagDetector(threshold=0.5)
-    result = det.detect(payload.content)
+    result: Dict[str, str] = check_both(payload.content)
+    
     print(f"content: {payload.content}")
     print(result)
+    if result.get("self_harm") == "FAIL":
+        return {"ok": False, "detail": "self_harm"}
+    if result.get("hate") == "FAIL":
+        return {"ok": False, "detail": "hate"}
+    
+    m = Message(
+        user_id=token_data.user_id,
+        content=encrypt(payload.content),
+        is_bot=False,
+        group_id=payload.group_id
+    )
+    session.add(m)
+    await session.commit()
+    await session.refresh(m)
 
-    if result[0] == False:
-        m = Message(
-            user_id=token_data.user_id,
-            content=encrypt(payload.content),
-            is_bot=False,
-            group_id=payload.group_id
-        )
-        session.add(m)
-        await session.commit()
-        await session.refresh(m)
+    await broadcast_message(session, m, payload.group_id)
 
-        await broadcast_message(session, m, payload.group_id)
+    asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
 
-        asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
-
-        return {"ok": True, "id": m.id}
-    return {"ok": False}
+    return {"ok": True, "id": m.id}
+    # return {"ok": True}
 
 
 @router.websocket("/ws")

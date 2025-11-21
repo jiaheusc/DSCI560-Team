@@ -68,9 +68,10 @@ class ChatGroups(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     group_name: Mapped[str] = mapped_column(String(50))
-
+    current_size: Mapped[int] = mapped_column(nullable=False, default=0) 
+    max_size: Mapped[int] = mapped_column(nullable=False, default=10)
+    
     is_active: Mapped[bool] = mapped_column(Boolean(), default=False)
-
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     memberships: Mapped[list["ChatGroupUsers"]] = relationship(

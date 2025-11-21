@@ -11,6 +11,22 @@ from schemas import (
 
 router = APIRouter(prefix="/api/therapist", tags=["Therapist"])
 
+@router.get("/profile/status")
+async def has_therapist_profile(
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(403)
+
+    profile = (await session.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == token_data.user_id)
+    )).scalar_one_or_none()
+    if not profile or not profile.prefer_name:
+        return {"ok": False}
+    
+    return {"ok": True}
+    
 @router.get("/therapists", response_model=TherapistListResponse)
 async def list_therapists(
     token_data: TokenData = Depends(get_current_user_token),
