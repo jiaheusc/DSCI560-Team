@@ -11,25 +11,25 @@ export const api = async (path, method = "GET", body, token) => {
   if (!res.ok) {
     let text = await res.text();
     let err;
-
     try {
       err = JSON.parse(text);
     } catch {
       err = { detail: text };
     }
-
     throw err;
   }
 
   return res.json();
 };
 
+//
 // =====================
 // Questionnaire
 // =====================
 export const submitQuestionnaire = (answers, token) =>
   api("/user/questionnaire", "POST", { content: answers }, token);
 
+//
 // =====================
 // Mailbox
 // =====================
@@ -42,12 +42,16 @@ export const approveUser = (userId, token) =>
 export const markMailRead = (mailId, token) =>
   api("/mailbox/read", "POST", { mail_id: mailId }, token);
 
-export const sendMail = (msg, token) =>
-  api("/mail/send", "POST", { message: msg }, token);
+export const sendMail = (payload, token) =>
+  api("/mailbox/send", "POST", payload, token);
 
-export const replyMail = (to_user, message, token) =>
-  api("/mail/reply", "POST", { to_user, message }, token);
+export const getMailPartner = (token) =>
+  api("/mailbox/partner", "GET", null, token);
 
+export const getTherapistUserProfile = (userId, token) =>
+  api(`/therapist/user/${userId}`, "GET", null, token);
+
+//
 // =====================
 // Chat Groups & Messages
 // =====================
@@ -60,29 +64,19 @@ export const getMessages = (groupId, token) =>
 export const sendMessageToGroup = (content, groupId, token) =>
   api("/messages", "POST", { content, group_id: groupId }, token);
 
+//
 // =====================
 // Therapist Profile (private)
 // =====================
-export const getMyProfile = async (token) => 
+export const getMyTherapistProfile = (token) =>
   api("/therapist/profile/me", "GET", null, token);
 
-export const updateProfile = async (payload, token) => 
+export const updateTherapistProfile = (payload, token) =>
   api("/therapist/profile/update", "POST", payload, token);
 
-
-
+//
 // =====================
-// Therapist: List & Public Profile
-// =====================
-export const listTherapists = (token) =>
-  api("/therapist/therapists", "GET", null, token);
-
-// Public API
-export const getPublicTherapistProfile = (id) =>
-  api(`/therapist/profile/${id}`, "GET");
-
-// =====================
-// User Profile (user_r)
+// User Profile (private)
 // =====================
 export const getMyUserProfile = (token) =>
   api("/user/profile/me", "GET", null, token);
@@ -93,15 +87,31 @@ export const createUserProfile = (payload, token) =>
 export const updateUserProfile = (payload, token) =>
   api("/user/profile/update", "POST", payload, token);
 
+export const getUserProfileStatus = (token) =>
+  api("/user/profile/status", "GET", null, token);
+
+//
 // Therapist assignment
+//
 export const assignTherapist = (therapist_id, token) =>
   api("/user/me/assign-therapist", "POST", { therapist_id }, token);
 
+//
 // =====================
-// Avatars & Password
+// Avatars & Password (shared)
 // =====================
 export const listAvatars = (token) =>
   api("/avatars", "GET", null, token);
 
 export const changePassword = (old_password, new_password, token) =>
   api("/auth/change-password", "POST", { old_password, new_password }, token);
+
+//
+// =====================
+// Therapist List & Public Profile
+// =====================
+export const listTherapists = (token) =>
+  api("/therapist/therapists", "GET", null, token);
+
+export const getPublicTherapistProfile = (id) =>
+  api(`/therapist/profile/${id}`, "GET");

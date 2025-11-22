@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
 import TherapistPicker from "./TherapistPicker";
-import { assignTherapist, getMailbox, sendMail } from "../api";
 
 const UserHome = () => {
   const { token, logout } = useAuth();
   const [needsTherapist, setNeedsTherapist] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
-  // ======= STEP 1: Check if user has therapist =======
+  // ===== Check if user has a therapist =====
   const checkTherapist = async () => {
     try {
       const res = await fetch("/api/user/me/therapist", {
@@ -18,7 +17,7 @@ const UserHome = () => {
 
       if (!data.has_therapist) {
         setNeedsTherapist(true);
-        setShowPicker(true);  // auto open modal
+        setShowPicker(true);
       } else {
         setNeedsTherapist(false);
         setShowPicker(false);
@@ -33,7 +32,7 @@ const UserHome = () => {
     if (token) checkTherapist();
   }, [token]);
 
-  // ======= When user selects therapist from modal =======
+  // ===== Chosen therapist =====
   const handleTherapistChosen = () => {
     setShowPicker(false);
     setNeedsTherapist(false);
@@ -41,10 +40,9 @@ const UserHome = () => {
 
   return (
     <div className="auth">
-
       <h2>User Home</h2>
 
-      {/* Auto-popup therapist picker */}
+      {/* Therapist picker popup */}
       {showPicker && (
         <TherapistPicker
           onClose={() => setShowPicker(false)}
@@ -60,9 +58,13 @@ const UserHome = () => {
         <p>Your questionnaire has been submitted.</p>
       )}
 
-      {/* Buttons visible only after therapist selected */}
+      {/* ====== NEW: Edit Profile button ====== */}
       {!needsTherapist && (
         <>
+          <button onClick={() => (window.location.href = "/profile")}>
+            Edit Profile
+          </button>
+
           <button onClick={() => (window.location.href = "/mailbox")}>
             Mailbox
           </button>

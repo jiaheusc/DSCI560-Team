@@ -1,12 +1,63 @@
 import React, { useState, useEffect } from "react";
-import { getMailbox, approveUser, markMailRead } from "../api";
+import { getMailbox, getTherapistUserProfile, sendMail,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
-
 const Mailbox = () => {
   const { token, role } = useAuth();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState({});
+  const [showSend, setShowSend] = useState(false);
+  const [targetId, setTargetId] = useState("");
+  const [recipient, setRecipient] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [status, setStatus] = useState("");
+  const loadUserPartner = async () => {
+    if (role !== "user") return; 
+    
+    const data = await getMailPartner(token);  
+    if (data.ok) {
+      setRecipient({
+        id: data.partner_id,
+        name: data.name
+      });
+    }
+  };
+  const lookupUser = async () => {
+    if (!targetId) return;
+    try {
+      const data = await getTherapistUserProfile(targetId, token);
+      setRecipient({
+        id: data.user_id,   
+        name: data.prefer_name || data.username
+      });
+      setStatus("");
+    } catch {
+      setRecipient(null);
+      setStatus("❌ User not found");
+    }
+  };
 
+  const doSend = async () => {
+    if (!msg.trim()) {
+      setStatus("❌ Message cannot be empty");
+      return;
+    }
+
+    const result = await sendMail({
+      target_id: Number(targetId),
+      message: msg
+    }, token);
+
+    if (result.ok) {
+      setStatus("✅ Sent!");
+      setMsg("");
+      setTimeout(() => {
+        setShowSend(false);
+        load(); // refresh mailbox
+      }, 800);
+    } else {
+      setStatus("❌ Failed to send");
+    }
+  };
   const load = async () => {
     const data = await getMailbox(token);
     setItems(data.messages);  
@@ -14,6 +65,9 @@ const Mailbox = () => {
 
   useEffect(() => {
     load();
+    if (role === "user") {
+      loadUserPartner();
+    }
   }, []);
 
   const toggle = async (id, is_read) => {
@@ -49,7 +103,99 @@ const Mailbox = () => {
 
   return (
     <div className="mailbox-container">
-      <h2 className="mailbox-header">📬 Mailbox</h2>
+      <div className="mailbox-header-row">
+        <h2 className="mailbox-header">📬 Mailbox</h2>
+        <button className="mailbox-send-btn" onClick={() => setShowSend(true)}>
+          Send
+        </button>
+        {showSend && (
+          <div className="mailbox-modal-overlay">
+            <div className="mailbox-modal-box">
+              <h3>Send Message</h3>
+
+              {/* USER VERSION (auto target) */}
+              {role === "user" && recipient && (
+                <p>
+                  Sending to: <strong>{recipient.name}</strong>
+                </p>
+              )}
+
+              {/* THERAPIST VERSION (search required) */}
+              {role === "therapist" && (
+                <>
+                  <label>Recipient User ID</label>
+                  <input
+                    type="number"
+                    value={targetId}
+                    onChange={(e) => setTargetId(e.target.value)}
+                  />
+                  <button onClick={lookupUser}>Lookup User</button>
+
+                  {recipient && (
+                    <p>
+                      Sending to: <strong>{recipient.name}</strong>
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* MESSAGE BOX */}
+              <label>Message</label>
+              <textarea
+                value={msg}
+                onChange={(e) => setMsg(e.target.value)}
+                style={{ height: 80 }}
+              />
+
+              {/* BUTTONS */}
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button
+                  disabled={!recipient}
+                  onClick={async () => {
+                    if (!msg.trim()) return setStatus("❌ Message cannot be empty");
+
+                    const result = await sendMail(
+                      {
+                        target_id: role === "user" ? recipient.id : Number(targetId),
+                        message: msg
+                      },
+                      token
+                    );
+
+                    if (result.ok) {
+                      setStatus("✅ Sent!");
+                      setMsg("");
+                      setTimeout(() => {
+                        setShowSend(false);
+                        load();
+                      }, 800);
+                    } else {
+                      setStatus("❌ Failed to send");
+                    }
+                  }}
+                >
+                  Send
+                </button>
+                <button onClick={() => setShowSend(false)}>Cancel</button>
+              </div>
+
+              {status && (
+                <p
+                  style={{
+                    marginTop: 10,
+                    color: status.startsWith("❌") ? "red" : "green",
+                  }}
+                >
+                  {status}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+
+      </div>
+
 
       {items.length === 0 && <p>No messages yet.</p>}
 
@@ -175,19 +321,18 @@ const Mailbox = () => {
           )}
           
           {/* Text mail */}
-          {m.content.type === "text" && (
+          {["text", "direct_message"].includes(m.content.type) && (
             <div
               className="mailbox-text"
               onClick={async () => {
-                if (!m.is_read) {
-                  await markMailRead(m.id, token);
-                }
+                if (!m.is_read) await markMailRead(m.id, token);
                 load();
               }}
             >
-              {m.content.text}
+              {m.content.text || m.content.message || "(No content)"}
             </div>
           )}
+
 
         </div>
       ))}

@@ -10,7 +10,7 @@ const TherapistHome = () => {
 
   const load = async () => {
     try {
-      const data = await getMailbox(token);   // { messages: [...] }
+      const data = await getMailbox(token);   
       setMessages(data.messages || []);
     } catch (err) {
       console.error("Mailbox load error:", err);
@@ -27,7 +27,7 @@ const TherapistHome = () => {
     <div className="auth">
       <h2>Therapist Dashboard</h2>
 
-      {/* 🔥 Unread alert */}
+      {/* Unread alert */}
       {unreadCount > 0 && (
         <p style={{ color: "red", fontWeight: "bold" }}>
           🔴 You have {unreadCount} new message{unreadCount > 1 ? "s" : ""} in your mailbox!

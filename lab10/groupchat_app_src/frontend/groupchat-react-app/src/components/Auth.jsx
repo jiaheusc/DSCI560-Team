@@ -4,117 +4,155 @@ import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 import ConfidentialityModal from "./ConfidentialityModal";
 
+import {
+    api,
+    getMyUserProfile,
+    getUserProfileStatus,
+    listTherapists,
+    getMyTherapistProfile,
+    getUserProfileStatus as userProfileStatusAPI
+} from "../api";
+
 const Auth = () => {
-    const { login, signup, authMsg } = useAuth();
-    const [u, setU] = useState("");
-    const [p, setP] = useState("");
-    const [localError, setLocalError] = useState("");
-    const [showConsent, setShowConsent] = useState(false);
+  const { login, signup, authMsg } = useAuth();
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [localError, setLocalError] = useState("");
+  const [showConsent, setShowConsent] = useState(false);
 
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
-    const goNextByToken = async (jwtToken) => {
-        if (!jwtToken) return;
+  const goNextByToken = async (jwtToken) => {
+    if (!jwtToken) return;
 
-        const payload = JSON.parse(atob(jwtToken.split(".")[1]));
+    const payload = JSON.parse(atob(jwtToken.split(".")[1]));
 
-        if (payload.role === "user") {
-
-            const r = await fetch("/api/user/questionnaire", {
-                headers: { Authorization: `Bearer ${jwtToken}` }
-            });
-            const q = await r.json();
-
-            if (!q.ok) {
-                navigate("/questionnaire");
-                return;
-            }
-
-            const r2 = await fetch("/api/user/me/therapist", {
-                headers: { Authorization: `Bearer ${jwtToken}` }
-            });
-            const t = await r2.json();
-
-            if (!t.has_therapist) {
-                navigate("/user");  
-                return;               
-            }
-
-            navigate("/user");
+    // ========================
+    // USER LOGIN FLOW
+    // ========================
+    if (payload.role === "user") {
+      try {
+        // 1. Questionnaire?
+        const q = await api(`/user/questionnaire`, "GET", null, jwtToken);
+        if (!q.ok) {
+          navigate("/questionnaire");
+          return;
         }
 
-        else if (payload.role === "therapist") navigate("/therapist");
-        else if (payload.role === "operator") navigate("/admin");
-        else navigate("/questionnaire");
-    };
-
-    // LOGIN
-    const handleLogin = async () => {
-        setLocalError("");
-
-        const jwt = await login(u, p);  // jwt is real token
-
-        if (jwt) goNextByToken(jwt);
-    };
-
-    // SIGNUP → open modal
-    const handleSignup = () => {
-        setLocalError("");
-
-        if (!u || !p) {
-            setLocalError("Username and password required.");
-            return;
+        // 2. Has therapist?
+        const t = await api(`/user/me/therapist`, "GET", null, jwtToken);
+        if (!t.has_therapist) {
+          navigate("/user");
+          return;
         }
-        setShowConsent(true);
-    };
 
-    // modal agree → real signup
-    const handleAgree = async () => {
-        setShowConsent(false);
+        // 3. User profile exists?
+        const prof = await getUserProfileStatus(jwtToken);
+        if (!prof.ok) {
+          navigate("/profile");
+          return;
+        }
 
-        const jwt = await signup(u, p);   // jwt is real token
+        // 4. All good → user home
+        navigate("/user");
+        return;
 
-        if (jwt) goNextByToken(jwt);
-    };
+      } catch (err) {
+        console.log("Login status check failed:", err);
+        navigate("/user");
+      }
+    }
 
-    const handleDecline = () => {
-        setShowConsent(false);
-        setLocalError("You must agree to the confidentiality agreement.");
-    };
+    // ========================
+    // THERAPIST LOGIN FLOW
+    // ========================
+    if (payload.role === "therapist") {
+      try {
+        const prof = await api("/therapist/profile/status", "GET", null, jwtToken);
+        if (!prof.ok) {
+          navigate("/therapist/profile");
+          return;
+        }
+        navigate("/therapist");
+        return;
+      } catch (err) {
+        navigate("/profile");
+      }
+    }
 
-    return (
-        <div className="card auth">
-            {showConsent && (
-                <ConfidentialityModal 
-                    onAgree={handleAgree}
-                    onDecline={handleDecline}
-                />
-            )}
+    if (payload.role === "operator") {
+      navigate("/admin");
+      return;
+    }
 
-            <h2>Welcome</h2>
+    navigate("/questionnaire");
+  };
 
-            <input
-                className="auth-input"
-                placeholder="Username"
-                value={u}
-                onChange={(e) => setU(e.target.value)}
-            />
-            <input
-                className="auth-input"
-                placeholder="Password"
-                type="password"
-                value={p}
-                onChange={(e) => setP(e.target.value)}
-            />
+  // LOGIN
+  const handleLogin = async () => {
+    setLocalError("");
 
-            <button onClick={handleLogin}>Log In</button>
-            <button onClick={handleSignup}>Sign Up</button>
+    const jwt = await login(u, p);
+    if (jwt) goNextByToken(jwt);
+  };
 
-            {(localError || authMsg) && (
-                <p className="error-message">{localError || authMsg}</p>
-            )}
-        </div>
-    );
+  // SIGNUP → open modal
+  const handleSignup = () => {
+    setLocalError("");
+
+    if (!u || !p) {
+      setLocalError("Username and password required.");
+      return;
+    }
+    setShowConsent(true);
+  };
+
+  // modal agree → real signup
+  const handleAgree = async () => {
+    setShowConsent(false);
+
+    const jwt = await signup(u, p);
+    if (jwt) goNextByToken(jwt);
+  };
+
+  const handleDecline = () => {
+    setShowConsent(false);
+    setLocalError("You must agree to the confidentiality agreement.");
+  };
+
+  return (
+    <div className="card auth">
+      {showConsent && (
+        <ConfidentialityModal
+          onAgree={handleAgree}
+          onDecline={handleDecline}
+        />
+      )}
+
+      <h2>Welcome</h2>
+
+      <input
+        className="auth-input"
+        placeholder="Username"
+        value={u}
+        onChange={(e) => setU(e.target.value)}
+      />
+      <input
+        className="auth-input"
+        placeholder="Password"
+        type="password"
+        value={p}
+        onChange={(e) => setP(e.target.value)}
+      />
+
+      <button onClick={handleLogin}>Log In</button>
+      <button onClick={handleSignup}>Sign Up</button>
+
+      {(localError || authMsg) && (
+        <p className="error-message">{localError || authMsg}</p>
+      )}
+    </div>
+  );
 };
 
 export default Auth;

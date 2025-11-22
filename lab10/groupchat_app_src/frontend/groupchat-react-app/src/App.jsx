@@ -9,9 +9,8 @@ import TherapistHome from "./components/TherapistHome";
 import Mailbox from "./components/Mailbox";
 import Chat from "./components/Chat";
 
-import Profile from "./components/Profile";                 // therapist private profile
+import ProfilePage from "./components/ProfilePage";   
 import TherapistPublicProfile from "./pages/TherapistPublicProfile";
-import UserProfile from "./pages/UserProfile";
 
 const App = () => {
   const { token, role } = useAuth();
@@ -32,61 +31,30 @@ const App = () => {
       <div className="page-container">
         <Routes>
 
-          {/* Default */}
           <Route path="/" element={<Navigate to="/login" />} />
 
-          {/* Login */}
           <Route path="/login" element={<Auth />} />
 
-          {/* Questionnaire (user only) */}
-          <Route
-            path="/questionnaire"
-            element={requireRole(<Questionnaire />, "user")}
-          />
+          <Route path="/questionnaire" element={requireRole(<Questionnaire />, "user")} />
 
           {/* USER HOME */}
-          <Route
-            path="/user"
-            element={requireRole(<UserHome />, "user")}
-          />
-
-          {/* USER PROFILE */}
-          <Route
-            path="/user/profile"
-            element={requireRole(<UserProfile />, "user")}
-          />
+          <Route path="/user" element={requireRole(<UserHome />, "user")} />
 
           {/* THERAPIST HOME */}
-          <Route
-            path="/therapist"
-            element={requireRole(<TherapistHome />, "therapist")}
-          />
+          <Route path="/therapist" element={requireRole(<TherapistHome />, "therapist")} />
 
-          {/* THERAPIST private profile (edit profile) */}
-          <Route
-            path="/therapist/profile"
-            element={requireRole(<Profile />, "therapist")}
-          />
+          {/*  Profile (user + therapist) */}
+          <Route path="/profile" element={requireAuth(<ProfilePage />)} />
 
-          {/* PUBLIC therapist profile (view only) */}
-          <Route
-            path="/therapist-profile/:id"
-            element={<TherapistPublicProfile />}
-          />
+          {/* Public therapist view */}
+          <Route path="/therapist-profile/:id" element={<TherapistPublicProfile />} />
 
-          {/* Mailbox (shared by both) */}
-          <Route
-            path="/mailbox"
-            element={requireAuth(<Mailbox />)}
-          />
+          {/* Shared mailbox */}
+          <Route path="/mailbox" element={requireAuth(<Mailbox />)} />
 
-          {/* Chat (shared by both) */}
-          <Route
-            path="/chat"
-            element={requireAuth(<Chat />)}
-          />
+          {/* Shared chat */}
+          <Route path="/chat" element={requireAuth(<Chat />)} />
 
-          {/* Not found */}
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </div>
