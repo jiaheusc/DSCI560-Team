@@ -1,31 +1,24 @@
 import json
-import os
 from typing import List, Dict, Any, Optional
 
 import numpy as np
 import faiss
-from fastapi import FastAPI
+
 from pydantic import BaseModel
 from transformers import (
-    pipeline,
     AutoTokenizer,
     AutoModelForCausalLM
 )
 from sentence_transformers import SentenceTransformer
+import os, torch
 
 
-
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.3") 
+LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct") 
 EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-small-en-v1.5")
-SELF_HARM_MODEL_NAME = os.getenv(
-    "SELF_HARM_MODEL_NAME",
-    "enguard/tiny-guard-4m-en-prompt-self-harm-binary-moderation"
-)
-
 RESOURCES_PATH = os.getenv("RESOURCES_PATH", "resources.json")
 
 TOP_K_RESOURCES = 3
-SELF_HARM_THRESHOLD = 0.5  # tune based on your experiments
+
 
 
 SAFETY_SYSTEM_PROMPT = """You are a supportive mental health support assistant for the MindMe app.
@@ -45,20 +38,6 @@ Rules:
 - Do not give medication instructions or specific treatment plans.
 Keep responses concise, warm, and clear.
 """
-
-CRISIS_TEMPLATE = """I'm really glad you reached out and shared this. 
-
-I’m an AI assistant, not a medical professional, so I can’t fully understand everything you’re going through or give a diagnosis. But what you’re describing sounds very important.
-
-If you are in immediate danger or feel you might act on these thoughts, please:
-- Contact your local emergency number right now, or
-- Call or text a crisis hotline (for example, 988 in the U.S. for the Suicide & Crisis Lifeline), or
-- Reach out to someone you trust (friend, family member, counselor) and tell them how you're feeling.
-
-You deserve support from real people who can help you stay safe. If you’d like, I can also share some supportive resources and ideas for coping while you reach out for help.
-"""
-
-
 
 
 class ChatRequest(BaseModel):
@@ -148,79 +127,73 @@ class ResourceRetriever:
         return results
 
 
-# =========================
-# SAFETY / MODERATION
-# =========================
-
-class SafetyChecker:
-    def __init__(self, model_name: str):
-        # Binary: SAFE vs SELF-HARM / crisis
-        self.pipe = pipeline("text-classification", model=model_name, top_k=None)
-
-    def is_self_harm_risk(self, text: str) -> bool:
-        """
-        Expects model with labels like:
-        - "NON_SELF_HARM", "SELF_HARM" or similar.
-        Adjust label names based on the HF model card.
-        """
-        preds = self.pipe(text)[0]
-        # Normalize to dict
-        label_scores = {p["label"].lower(): p["score"] for p in preds}
-        # Heuristic: any self-harm-ish label above threshold
-        for label, score in label_scores.items():
-            if "self" in label or "harm" in label or "suic" in label:
-                if score >= SELF_HARM_THRESHOLD:
-                    return True
-        return False
-
-
-# =========================
-# LLM WRAPPER
-# =========================
 
 class SupportLLM:
     def __init__(self, model_name: str):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
-        self.gen = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            max_new_tokens=512,
-            do_sample=True,
-            top_p=0.9,
-            temperature=0.7,
+        # Qwen needs trust_remote_code + sentencepiece/fast tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_name, use_fast=True, trust_remote_code=True
+        )
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            low_cpu_mem_usage=True
         )
 
-    def build_prompt(self, system_prompt: str,
-                     history: List[Dict[str, str]],
-                     user_message: str) -> str:
+        # pad_token → eos to avoid warnings & extra work
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.model.config.pad_token_id = self.tokenizer.eos_token_id
 
-        prompt_parts = [f"[SYSTEM]\n{system_prompt}\n"]
+        # lightweight default gen config for CPU
+        self.max_new_tokens = 128
+        self.temperature = 0.7
+        self.top_p = 0.9
+        self.repetition_penalty = 1.05
+
+    def _to_chat_messages(self, system_prompt: str, history: List[Dict[str, str]], user_message: str):
+        """
+        Convert your history into Qwen's chat format.
+        Qwen template roles: 'system', 'user', 'assistant'
+        """
+        msgs = []
+        if system_prompt:
+            msgs.append({"role": "system", "content": system_prompt})
         if history:
             for turn in history:
                 role = turn.get("role", "user")
                 content = turn.get("content", "")
-                if role == "user":
-                    prompt_parts.append(f"[USER]\n{content}\n")
-                else:
-                    prompt_parts.append(f"[ASSISTANT]\n{content}\n")
-        prompt_parts.append(f"[USER]\n{user_message}\n[ASSISTANT]\n")
-        return "\n".join(prompt_parts)
+                if role not in ("user", "assistant"):
+                    role = "user"
+                msgs.append({"role": role, "content": content})
+        msgs.append({"role": "user", "content": user_message})
+        return msgs
 
-    def generate(self,
-                 system_prompt: str,
-                 history: List[Dict[str, str]],
-                 user_message: str) -> str:
-        prompt = self.build_prompt(system_prompt, history, user_message)
-        out = self.gen(prompt, num_return_sequences=1)[0]["generated_text"]
-        # Take only content after last [ASSISTANT]
-        last = out.rfind("[ASSISTANT]")
-        if last != -1:
-            answer = out[last + len("[ASSISTANT]"):].strip()
-        else:
-            answer = out.strip()
-        return answer
+    def generate(self, system_prompt: str, history: List[Dict[str, str]], user_message: str) -> str:
+        # build chat messages and turn them into a single prompt with Qwen's template
+        messages = self._to_chat_messages(system_prompt, history, user_message)
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True  # adds the assistant tag at end
+        )
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=True,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                repetition_penalty=self.repetition_penalty,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
+        text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Best-effort: pull only the final assistant chunk after the last user turn
+        # (Qwen's template formats clearly, but this keeps it robust)
+        return text.split(messages[-1]["content"])[-1].strip()
+
 
 
 # =========================
@@ -282,24 +255,13 @@ def attach_resources_to_reply(reply: str, resources: List[Dict[str, Any]]) -> st
 class MentalHealthChatbot:
     def __init__(self):
         self.retriever = ResourceRetriever(EMBED_MODEL_NAME, RESOURCES_PATH)
-        self.safety = SafetyChecker(SELF_HARM_MODEL_NAME)
         self.llm = SupportLLM(LLM_MODEL_NAME)
 
     def handle_message(self, req: ChatRequest) -> ChatResponse:
         user_msg = req.message.strip()
         history = req.history or []
 
-        # 1. Self-harm / crisis detection
-        if self.safety.is_self_harm_risk(user_msg):
-            return ChatResponse(
-                reply=CRISIS_TEMPLATE,
-                resources=[
-                    r for r in self.retriever.retrieve("suicide self-harm crisis help", top_k=TOP_K_RESOURCES)
-                ],
-                flagged_risk=True
-            )
-
-        # 2. Resource-seeking?
+        #Resource-seeking?
         if is_resource_intent(user_msg):
             resources = self.retriever.retrieve(user_msg, top_k=TOP_K_RESOURCES)
             base_reply = self.llm.generate(SAFETY_SYSTEM_PROMPT, history, user_msg)
@@ -311,7 +273,7 @@ class MentalHealthChatbot:
                 flagged_risk=False
             )
 
-        # 3. Normal supportive conversation
+        #Normal supportive conversation
         base_reply = self.llm.generate(SAFETY_SYSTEM_PROMPT, history, user_msg)
         base_reply = enforce_no_diagnosis(base_reply)
         return ChatResponse(
@@ -321,7 +283,17 @@ class MentalHealthChatbot:
         )
 
 
-
+if __name__ == "__main__":
+    bot = MentalHealthChatbot()
+    demo = [
+        "I’ve been anxious before presentations. Any tips?",
+        "Where can I find resources for coping with panic attacks?",
+        "I feel stuck and unmotivated lately.",
+    ]
+    for msg in demo:
+        res = bot.handle_message(ChatRequest(user_id="u1", message=msg, history=[]))
+        print("\nUSER:", msg)
+        print("BOT :", res.reply)
 
 
 

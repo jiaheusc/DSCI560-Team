@@ -26,5 +26,111 @@
     "topics": ["crisis", "self-harm", "suicide"],
     "summary": "24/7 free and confidential emotional support in the US.",
     "url": "https://988lifeline.org/"
-  }
+  },
+{
+  "id": "crisis_text_line_us",
+  "title": "Crisis Text Line (US)",
+  "topics": ["crisis", "text", "immediate help"],
+  "summary": "24/7 support by text. Text HOME to 741741 to reach a Crisis Counselor.",
+  "url": "https://www.crisistextline.org/"
+},
+{
+  "id": "samhsa_locator_us",
+  "title": "SAMHSA Treatment Locator (US)",
+  "topics": ["treatment", "therapy", "substance use", "mental health"],
+  "summary": "Find nearby mental health and substance use treatment services in the US.",
+  "url": "https://findtreatment.gov/"
+},
+{
+  "id": "nami_helpline_us",
+  "title": "NAMI HelpLine (US)",
+  "topics": ["education", "support", "family"],
+  "summary": "Information, resource referrals, and support for people and families.",
+  "url": "https://www.nami.org/help"
+},
+{
+  "id": "veterans_crisis_line_us",
+  "title": "Veterans Crisis Line (US)",
+  "topics": ["veterans", "crisis", "military"],
+  "summary": "24/7 confidential crisis support for service members and veterans.",
+  "url": "https://www.veteranscrisisline.net/"
+},
+{
+  "id": "trevor_project_lgbtq",
+  "title": "The Trevor Project (LGBTQ+ Youth)",
+  "topics": ["lgbtq", "youth", "crisis", "support"],
+  "summary": "24/7 crisis intervention and suicide prevention for LGBTQ+ young people.",
+  "url": "https://www.thetrevorproject.org/"
+},
+{
+  "id": "trans_lifeline",
+  "title": "Trans Lifeline",
+  "topics": ["transgender", "peer support", "hotline"],
+  "summary": "Peer support hotline run by and for trans people.",
+  "url": "https://translifeline.org/"
+},
+{
+  "id": "samaritans_uk",
+  "title": "Samaritans (UK & Ireland)",
+  "topics": ["crisis", "listening", "uk", "ireland"],
+  "summary": "24/7 confidential emotional support via phone, email, or chat.",
+  "url": "https://www.samaritans.org/"
+},
+{
+  "id": "talk_suicide_canada",
+  "title": "Talk Suicide Canada",
+  "topics": ["crisis", "canada", "support"],
+  "summary": "24/7 bilingual crisis support across Canada; text and phone options.",
+  "url": "https://www.talksuicide.ca/"
+},
+{
+  "id": "lifeline_australia",
+  "title": "Lifeline (Australia)",
+  "topics": ["crisis", "australia", "support"],
+  "summary": "24/7 crisis support and suicide prevention services in Australia.",
+  "url": "https://www.lifeline.org.au/"
+},
+{
+  "id": "mind_uk",
+  "title": "Mind (UK)",
+  "topics": ["information", "uk", "services"],
+  "summary": "Trusted information on mental health problems, services, and support.",
+  "url": "https://www.mind.org.uk/"
+},
+{
+  "id": "adaa_resources",
+  "title": "ADAA: Anxiety & Depression Resources",
+  "topics": ["anxiety", "depression", "self-help"],
+  "summary": "Evidence-based tips, self-help tools, and therapist directory.",
+  "url": "https://adaa.org/"
+},
+{
+  "id": "sleep_foundation",
+  "title": "Sleep Foundation – Sleep & Mental Health",
+  "topics": ["sleep", "insomnia", "wellbeing"],
+  "summary": "Research-backed articles and tips to improve sleep and mood.",
+  "url": "https://www.sleepfoundation.org/"
+},
+{
+  "id": "psychology_today_finder",
+  "title": "Therapist Finder (Global Directory)",
+  "topics": ["therapy", "counseling", "directory"],
+  "summary": "Search for licensed therapists by location, specialty, and insurance.",
+  "url": "https://www.psychologytoday.com/us/therapists"
+},
+{
+  "id": "7cups_peer_support",
+  "title": "7 Cups – Peer Support & Listeners",
+  "topics": ["peer support", "chat", "community"],
+  "summary": "On-demand emotional support from trained volunteer listeners.",
+  "url": "https://www.7cups.com/"
+},
+{
+  "id": "grounding_breathing_basics",
+  "title": "Grounding & Breathing Basics",
+  "topics": ["grounding", "breathing", "anxiety", "panic"],
+  "summary": "Simple 5–4–3–2–1 grounding and paced breathing exercises.",
+  "url": "https://www.anxietycanada.com/articles/grounding-techniques-5-4-3-2-1/"
+}
+
 ]
