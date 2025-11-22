@@ -27,7 +27,7 @@ const Mailbox = () => {
       const data = await getTherapistUserProfile(targetId, token);
       setRecipient({
         id: data.user_id,   
-        name: data.prefer_name || data.username
+        name: data.name
       });
       setStatus("");
     } catch {
@@ -204,7 +204,7 @@ const Mailbox = () => {
 
           {!m.is_read && (<span className="mailbox-unread-dot">●</span>)}
 
-          <div className="mailbox-row"><strong>From:</strong> {m.from_user}</div>
+          <div className="mailbox-row"><strong>From:</strong> {m.from_name}</div>
           <div className="mailbox-row"><strong>Type:</strong> {m.content.type}</div>
           <div className="mailbox-row">
             <strong>Received:</strong> {new Date(m.created_at).toLocaleString()}
@@ -324,14 +324,63 @@ const Mailbox = () => {
           {["text", "direct_message"].includes(m.content.type) && (
             <div
               className="mailbox-text"
+              style={{
+                padding: "10px",
+                borderRadius: "6px",
+                marginTop: "8px",
+              }}
               onClick={async () => {
-                if (!m.is_read) await markMailRead(m.id, token);
-                load();
+                if (!m.is_read) {
+                  await markMailRead(m.id, token);
+                  load();
+                }
               }}
             >
-              {m.content.text || m.content.message || "(No content)"}
+              {/* Display content */}
+              <div style={{ marginBottom: 6 }}>
+                {m.content.text || m.content.message || "(No content)"}
+              </div>
+
+              {/* Reply button for both user and therapist */}
+              <button
+                style={{
+                  fontSize: "13px",
+                  padding: "4px 8px",
+                  cursor: "pointer"
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSend(true);
+
+                  if (role === "user") {
+                    // USER MUST reply to fixed therapist
+                    if (!recipient) {
+                      setStatus("❌ No therapist assigned yet");
+                      setShowSend(false);
+                      return;
+                    }
+
+                    setRecipient({
+                      id: recipient.id,
+                      name: recipient.name
+                    });
+                    setTargetId(recipient.id);
+                  } else {
+                    // THERAPIST replying directly to a user
+                    setRecipient({
+                      id: m.from_user,
+                      name: m.from_name || `User ${m.from_user}`
+                    });
+                    setTargetId(m.from_user);
+                  }
+                }}
+
+              >
+                ↩ Reply
+              </button>
             </div>
           )}
+
 
 
         </div>

@@ -35,7 +35,7 @@ const TherapistHome = () => {
       )}
 
       {/* Profile */}
-      <button onClick={() => navigate("/therapist/profile")}>
+      <button onClick={() => navigate("/profile")}>
         Edit Profile
       </button>
 

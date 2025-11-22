@@ -58,7 +58,6 @@ const UserHome = () => {
         <p>Your questionnaire has been submitted.</p>
       )}
 
-      {/* ====== NEW: Edit Profile button ====== */}
       {!needsTherapist && (
         <>
           <button onClick={() => (window.location.href = "/profile")}>
