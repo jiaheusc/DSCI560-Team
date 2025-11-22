@@ -102,3 +102,40 @@ async def approve_user(
     session.add(notice)
     await session.commit()
     return {"ok": True}
+
+@router.get("/partner")
+async def get_mail_partner(
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Automatically find the 'partner' in the UserTherapist relationship.
+    - If current user is USER → partner is their THERAPIST
+    - If current user is THERAPIST → partner is a USER? (ambiguous, skip auto)
+    """
+    # USER ONLY: auto get therapist
+    if token_data.role == UserRole.user:
+        stmt = select(UserTherapist).where(UserTherapist.user_id == token_data.user_id)
+        rel = (await session.execute(stmt)).scalar_one_or_none()
+
+        if not rel:
+            return {"ok": False, "partner_id": None, "name": None}
+
+        therapist = await session.get(User, rel.therapist_id)
+        name = therapist.username
+
+        # if therapist has profile with prefer_name
+        from db import TherapistProfile  # import inside
+        prof = (
+            await session.execute(
+                select(TherapistProfile).where(TherapistProfile.user_id == therapist.id)
+            )
+        ).scalar_one_or_none()
+
+        if prof and prof.prefer_name:
+            name = prof.prefer_name
+
+        return {"ok": True, "partner_id": therapist.id, "name": name}
+
+    # THERAPIST: cannot auto determine (multiple users)
+    return {"ok": False, "partner_id": None, "name": None}
