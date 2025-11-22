@@ -151,7 +151,7 @@ async def assign_my_therapist(
         await session.commit()
         return {"ok": True, "detail": "Therapist assigned, questionnaire pending."}
     
-    rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+    rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3307/groupchat")
     recommendation = rec.recommend(token_data.user_id)
     questionnaire.recommendation = recommendation
 
@@ -200,3 +200,19 @@ async def get_my_therapist(
         "has_therapist": True,
         "therapist": therapist_data
     }
+
+@router.get("/profile/status")
+async def user_profile_status(
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    if token_data.role != UserRole.user:
+        raise HTTPException(403)
+
+    stmt = select(UserProfile).where(UserProfile.user_id == token_data.user_id)
+    profile = (await session.execute(stmt)).scalar_one_or_none()
+
+    if not profile or not profile.prefer_name:
+        return {"ok": False}
+
+    return {"ok": True}

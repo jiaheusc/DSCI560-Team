@@ -53,6 +53,7 @@ async def login(
     payload: AuthPayload,
     session: AsyncSession = Depends(get_db)
 ):
+    print(">>> LOGIN ENTERED")  
     res = await session.execute(select(User).where(User.username == payload.username))
     u = res.scalar_one_or_none()
     if not u or not verify_password(payload.password, u.password_hash):
