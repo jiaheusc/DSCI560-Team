@@ -88,64 +88,82 @@ const Chat = () => {
   };
 
   return (
-    <div className="chat-page">
+  <div className="chat-container">
 
-      {/* Left side group list */}
-      <div className="chat-groups">
-        <h3>Your Groups</h3>
-        {groups.length === 0 && <p>No groups yet.</p>}
+    {/* 左侧群组列表 */}
+    <div className="chat-sidebar">
+      <h3>Your Groups</h3>
+      {groups.length === 0 && <p>No groups yet.</p>}
 
-        {groups.map((g) => (
-          <div
+      {groups.map((g) => {
+        const isActive = g.id === groupId;
+        return (
+          <button
             key={g.id}
-            className={`chat-group-item ${g.id === groupId ? "active" : ""}`}
+            className={`group-btn ${isActive ? "active" : ""}`}
             onClick={() => handleSelectGroup(g.id)}
           >
-            {g.group_name} ({g.current_size})
-          </div>
-        ))}
-      </div>
+            <div className="group-name">{g.group_name}</div>
+            <div className="group-count">{g.current_size} members</div>
+          </button>
+        );
+      })}
+    </div>
 
-      {/* Chat messages */}
-      <div className="chat-main">
-        {!groupId && (
-          <p className="chat-placeholder">Select a group to start chatting</p>
-        )}
+    {/* 右侧聊天区 */}
+    <div className="chat-main">
 
-        {groupId && (
-          <>
-            <div className="chat-msg-list">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`chat-msg ${m.username === userId ? "me" : "other"}`}
-                >
-                  <div className="chat-msg-user">
-                    {m.is_bot ? "LLM Bot" : m.username}
-                  </div>
-                  <div className="chat-msg-text">{m.content}</div>
-                  <div className="chat-msg-time">
-                    {new Date(m.created_at).toLocaleTimeString()}
+      {!groupId && (
+        <p className="chat-placeholder">Select a group to start chatting</p>
+      )}
+
+      {groupId && (
+        <>
+          {/* 聊天内容区 */}
+          <div className="chat-msg-list">
+            {messages.map((m) => {
+              const isMe = m.user_id === userId;
+
+              return (
+                <div key={m.id} className={`msg-row ${isMe ? "me" : "other"}`}>
+                  <div className="msg-body">
+
+                    <div className="msg-username">
+                      {m.is_bot ? "LLM Bot" : (m.prefer_name || m.username)}
+                    </div>
+
+                    <div className="msg-bubble">
+                      {m.content}
+                    </div>
+
+                    <div className="msg-time">
+                      {new Date(m.created_at).toLocaleTimeString()}
+                    </div>
+
                   </div>
                 </div>
-              ))}
+              );
+            })}
 
-              <div ref={bottomRef}></div>
-            </div>
+            <div ref={bottomRef}></div>
+          </div>
 
-            <div className="chat-input-bar">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type a message..."
-              />
-              <button onClick={sendMessage}>Send</button>
-            </div>
-          </>
-        )}
-      </div>
+          {/* 输入框 */}
+          <div className="chat-input-bar">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type a message..."
+            />
+            <button onClick={sendMessage}>Send</button>
+          </div>
+        </>
+      )}
+
     </div>
-  );
+  </div>
+);
+
 };
 
 export default Chat;
