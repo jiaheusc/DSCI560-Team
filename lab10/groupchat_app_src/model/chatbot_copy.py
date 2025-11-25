@@ -55,9 +55,14 @@ class ChatResponse(BaseModel):
 
 class ResourceRetriever:
     def __init__(self, embed_model_name: str, resources_path: str):
-        self.embedder = SentenceTransformer(embed_model_name)
+        self.device = torch.device("cpu")
+        self.embedder = SentenceTransformer(embed_model_name, device=self.device) 
         self.resources = self._load_resources(resources_path)
         self.index, self.resource_vectors = self._build_index(self.resources)
+
+        # self.embedder = SentenceTransformer(embed_model_name)
+        # self.resources = self._load_resources(resources_path)
+        # self.index, self.resource_vectors = self._build_index(self.resources)
 
     def _load_resources(self, path: str) -> List[Dict[str, Any]]:
         if not os.path.exists(path):
@@ -128,66 +133,88 @@ class ResourceRetriever:
 
 
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch, os
-
 class SupportLLM:
     def __init__(self, model_name: str):
+        self.device = torch.device("cpu")
+        print(f"Using device: {self.device}")
+
+        # Qwen needs trust_remote_code + sentencepiece/fast tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name, use_fast=True, trust_remote_code=True
         )
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            low_cpu_mem_usage=True
+        ).to(self.device)
 
-        # === GPU load ===
-        if torch.cuda.is_available():
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                trust_remote_code=True,
-                device_map="auto",                           # place on GPU
-                torch_dtype=(torch.bfloat16
-                             if torch.cuda.is_bf16_supported()
-                             else torch.float16),
-                low_cpu_mem_usage=True,
-            )
-        else:
-            # CPU fallback
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                trust_remote_code=True,
-                low_cpu_mem_usage=True,
-            )
-
-        # pad_token → eos
+        # pad_token → eos to avoid warnings & extra work
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model.config.pad_token_id = self.tokenizer.eos_token_id
 
-        # Generation knobs (constants)
+        # self.model = AutoModelForCausalLM.from_pretrained(
+        #     model_name,
+        #     trust_remote_code=True,
+        #     low_cpu_mem_usage=True
+        # ).to(self.device)
+
+        # lightweight default gen config for CPU
         self.max_new_tokens = 128
         self.temperature = 0.7
         self.top_p = 0.9
         self.repetition_penalty = 1.05
 
-    def _to_chat_messages(self, system_prompt, history, user_message):
+    # def __init__(self, model_name: str):
+    #     # Qwen needs trust_remote_code + sentencepiece/fast tokenizer
+    #     self.tokenizer = AutoTokenizer.from_pretrained(
+    #         model_name, use_fast=True, trust_remote_code=True
+    #     )
+    #     self.model = AutoModelForCausalLM.from_pretrained(
+    #         model_name,
+    #         trust_remote_code=True,
+    #         low_cpu_mem_usage=True
+    #     )
+
+    #     # pad_token → eos to avoid warnings & extra work
+    #     if self.tokenizer.pad_token is None:
+    #         self.tokenizer.pad_token = self.tokenizer.eos_token
+    #     self.model.config.pad_token_id = self.tokenizer.eos_token_id
+
+    #     # lightweight default gen config for CPU
+    #     self.max_new_tokens = 128
+    #     self.temperature = 0.7
+    #     self.top_p = 0.9
+    #     self.repetition_penalty = 1.05
+
+    def _to_chat_messages(self, system_prompt: str, history: List[Dict[str, str]], user_message: str):
+        """
+        Convert your history into Qwen's chat format.
+        Qwen template roles: 'system', 'user', 'assistant'
+        """
         msgs = []
         if system_prompt:
             msgs.append({"role": "system", "content": system_prompt})
-        for turn in (history or []):
-            role = turn.get("role", "user")
-            content = turn.get("content", "")
-            if role not in ("user", "assistant"):
-                role = "user"
-            msgs.append({"role": role, "content": content})
+        if history:
+            for turn in history:
+                role = turn.get("role", "user")
+                content = turn.get("content", "")
+                if role not in ("user", "assistant"):
+                    role = "user"
+                msgs.append({"role": role, "content": content})
         msgs.append({"role": "user", "content": user_message})
         return msgs
 
-    def generate(self, system_prompt, history, user_message) -> str:
+    def generate(self, system_prompt: str, history: List[Dict[str, str]], user_message: str) -> str:
+        # build chat messages and turn them into a single prompt with Qwen's template
         messages = self._to_chat_messages(system_prompt, history, user_message)
         prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages,
+            tokenize=False,
+            add_generation_prompt=True  # adds the assistant tag at end
         )
-        # >>> ensure tensors are on the model's device (GPU if available)
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
@@ -196,10 +223,39 @@ class SupportLLM:
                 temperature=self.temperature,
                 top_p=self.top_p,
                 repetition_penalty=self.repetition_penalty,
-                pad_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=self.tokenizer.eos_token_id
             )
         text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Best-effort: pull only the final assistant chunk after the last user turn
+        # (Qwen's template formats clearly, but this keeps it robust)
         return text.split(messages[-1]["content"])[-1].strip()
+
+    # def generate(self, system_prompt: str, history: List[Dict[str, str]], user_message: str) -> str:
+    #     # build chat messages and turn them into a single prompt with Qwen's template
+    #     messages = self._to_chat_messages(system_prompt, history, user_message)
+    #     prompt = self.tokenizer.apply_chat_template(
+    #         messages,
+    #         tokenize=False,
+    #         add_generation_prompt=True  # adds the assistant tag at end
+    #     )
+    #     inputs = self.tokenizer(prompt, return_tensors="pt")
+    #     with torch.no_grad():
+    #         outputs = self.model.generate(
+    #             **inputs,
+    #             max_new_tokens=self.max_new_tokens,
+    #             do_sample=True,
+    #             temperature=self.temperature,
+    #             top_p=self.top_p,
+    #             repetition_penalty=self.repetition_penalty,
+    #             pad_token_id=self.tokenizer.eos_token_id
+    #         )
+    #     text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    #     # Best-effort: pull only the final assistant chunk after the last user turn
+    #     # (Qwen's template formats clearly, but this keeps it robust)
+    #     return text.split(messages[-1]["content"])[-1].strip()
+
 
 
 # =========================
@@ -290,10 +346,6 @@ class MentalHealthChatbot:
 
 
 if __name__ == "__main__":
-    print("cuda?", torch.cuda.is_available())
-    if torch.cuda.is_available():
-      print("device:", torch.cuda.get_device_name(0))
-
     bot = MentalHealthChatbot()
     demo = [
         "I’ve been anxious before presentations. Any tips?",

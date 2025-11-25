@@ -5,32 +5,25 @@ from db import MailboxMessage, User, get_db, UserRole, UserTherapist,UserProfile
 from auth import get_current_user_token
 from schemas import (
     TokenData, MailboxListResponse, MailSendPayload, 
-    MailMarkReadPayload, MailApprovePayload, MailSendSuccessResponse
+    MailMarkReadPayload, MailApprovePayload, 
+    MailSendSuccessResponse, 
 )
 from datetime import datetime
-import json
-
-router = APIRouter(prefix="/api/mailbox", tags=["Mailbox"])
-
-import json
-
-router = APIRouter(prefix="/api/mailbox", tags=["Mailbox"])
-
 from sqlalchemy.orm import aliased
+import json
 
-@router.get("", response_model=MailboxListResponse)
-async def get_mailbox(
-    token_data: TokenData = Depends(get_current_user_token),
-    session: AsyncSession = Depends(get_db)
-):
+router = APIRouter(prefix="/api/mailbox", tags=["Mailbox"])
+
+async def _fetch_and_format_mails(session: AsyncSession, is_sent_box: bool, user_id: int):
 
     Sender = aliased(User)
     SenderUP = aliased(UserProfile)
     SenderTP = aliased(TherapistProfile)
-
     Receiver = aliased(User)
     ReceiverUP = aliased(UserProfile)
     ReceiverTP = aliased(TherapistProfile)
+    
+    where_condition = MailboxMessage.from_user == user_id if is_sent_box else MailboxMessage.to_user == user_id
 
     stmt = (
         select(
@@ -38,41 +31,24 @@ async def get_mailbox(
             Sender, SenderUP, SenderTP,
             Receiver, ReceiverUP, ReceiverTP,
         )
-        .select_from(MailboxMessage)   # ⭐ FIXED ⭐
-        .join(Sender, MailboxMessage.from_user == Sender.id)
+        .select_from(MailboxMessage)
+        .outerjoin(Sender, MailboxMessage.from_user == Sender.id)
         .outerjoin(SenderUP, SenderUP.user_id == Sender.id)
         .outerjoin(SenderTP, SenderTP.user_id == Sender.id)
-
         .join(Receiver, MailboxMessage.to_user == Receiver.id)
         .outerjoin(ReceiverUP, ReceiverUP.user_id == Receiver.id)
         .outerjoin(ReceiverTP, ReceiverTP.user_id == Receiver.id)
 
-        .where(MailboxMessage.to_user == token_data.user_id)
+        .where(where_condition)
         .order_by(desc(MailboxMessage.created_at))
     )
 
     rows = (await session.execute(stmt)).all()
-
     out = []
+
     for m, sender, sup, stp, receiver, rup, rtp in rows:
-
-        print("sender.id =", sender.id)
-        print("sup =", sup)
-        print("stp =", stp)
-
-        if sup and sup.prefer_name:
-            sender_name = sup.prefer_name
-        elif stp and stp.prefer_name:
-            sender_name = stp.prefer_name
-        else:
-            sender_name = sender.username
-
-        if rup and rup.prefer_name:
-            receiver_name = rup.prefer_name
-        elif rtp and rtp.prefer_name:
-            receiver_name = rtp.prefer_name
-        else:
-            receiver_name = receiver.username
+        sender_name = (sup and sup.prefer_name) or (stp and stp.prefer_name) or sender.username if sender else "System"
+        receiver_name = (rup and rup.prefer_name) or (rtp and rtp.prefer_name) or receiver.username
 
         content = m.content
         if isinstance(content, str):
@@ -80,7 +56,7 @@ async def get_mailbox(
                 content = json.loads(content)
             except:
                 content = {"type": "unknown", "text": content}
-
+        
         out.append({
             "id": m.id,
             "from_user": m.from_user,
@@ -92,9 +68,24 @@ async def get_mailbox(
             "created_at": m.created_at,
         })
 
+    return out
+
+@router.get("", response_model=MailboxListResponse)
+async def get_mailbox(
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    out = await _fetch_and_format_mails(session, False, token_data.user_id)
     return {"messages": out}
 
 
+@router.get("/sent", response_model=MailboxListResponse)
+async def get_sent_mailbox(
+    token_data: TokenData = Depends(get_current_user_token), 
+    session: AsyncSession = Depends(get_db)
+):
+    out = await _fetch_and_format_mails(session, True, token_data.user_id)
+    return {"messages": out}
 
 @router.post("/send", response_model=MailSendSuccessResponse)
 async def send_notification(
@@ -172,7 +163,7 @@ async def approve_user(
     
     if not user:
         raise HTTPException(404)
-    # 应该加上 approve=true
+    # 应该加上 approve=true吗?
     notice = MailboxMessage(
         from_user=token_data.user_id, 
         to_user=user.id, 
@@ -204,7 +195,6 @@ async def get_mail_partner(
         name = therapist.username
 
         # if therapist has profile with prefer_name
-        from db import TherapistProfile  # import inside
         prof = (
             await session.execute(
                 select(TherapistProfile).where(TherapistProfile.user_id == therapist.id)

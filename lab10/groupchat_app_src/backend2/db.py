@@ -18,7 +18,7 @@ load_dotenv()
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "mysql+asyncmy://chatuser:chatpass@localhost:3307/groupchat"
+    "mysql+asyncmy://chatuser:chatpass@localhost:3306/groupchat"
 )
 
 # ---------------------------------------------------------

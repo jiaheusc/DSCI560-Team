@@ -12,3 +12,5 @@ sentence_transformers
 numpy
 pymysql
 model2vec
+faiss-cpu
+accelerate

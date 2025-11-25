@@ -179,6 +179,11 @@ class ChatGroupUpdate(BaseModel):
 class MemberAdd(BaseModel):
     username: str
 
+class ChatRequest(BaseModel):
+    user_id: str
+    message: str
+    history: List[dict[str, str]]
+
 # mailbox
 class MailMarkReadPayload(BaseModel):
     mail_id: int
@@ -197,7 +202,9 @@ class MailSendSuccessResponse(BaseModel):
 class MailboxMessageResponse(BaseModel):
     id: int
     from_user: Optional[int]
+    from_name: Optional[str]
     to_user: int
+    to_name: str
     content: dict
     is_read: bool
     created_at: datetime

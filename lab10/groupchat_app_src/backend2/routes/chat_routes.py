@@ -6,16 +6,37 @@ from db import Message, ChatGroups, ChatGroupUsers, User, UserRole, get_db
 from auth import get_current_user_token, verify_websocket_token
 from websocket_manager import ConnectionManager
 from llm import chat_completion
+import time
 import asyncio
 from utils.security import encrypt, decrypt
 from model.red_flag_detector import check_both, batch_check_both
+from model.chatbot import MentalHealthChatbot
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, 
     ChatGroupCreate, ChatGroupListResponse, ChatGroupUpdate, 
-    ChatGroupResponse, MemberAdd
+    ChatGroupResponse, MemberAdd, ChatRequest
 )
 router = APIRouter(prefix="/api", tags=["Group Chat"])
-manager = ConnectionManager()
+
+class UserConnectionManager:
+    def __init__(self):
+        self.active_users: dict[int, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: int):
+        await websocket.accept()
+        self.active_users[user_id] = websocket
+
+    async def disconnect(self, websocket: WebSocket, user_id: int):
+        if user_id in self.active_users:
+            del self.active_users[user_id]
+
+    async def send_to_user(self, user_id: int, message: dict):
+        ws = self.active_users.get(user_id)
+        if ws:
+            await ws.send_json(message)
+
+manager = UserConnectionManager()
+global_chatbot_instance = MentalHealthChatbot()
 
 async def broadcast_message(session: AsyncSession, msg: Message, group_id: int):
     username = None
@@ -44,31 +65,38 @@ async def broadcast_message(session: AsyncSession, msg: Message, group_id: int):
     for uid in member_ids:
         await manager.send_to_user(uid, payload)
 
-async def maybe_answer_with_llm(session: AsyncSession, content: str, group_id: int):
+async def maybe_answer_with_llm(sender_id: int, content: str, group_id: int):
     if "?" not in content:
         return
+    
+    from db import SessionLocal, Message
 
-    system_prompt = (
-        "You are a helpful assistant in a group chat. "
-        "Answer concisely and clearly."
-    )
-    try:
-        reply = await chat_completion([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content}
-        ])
-    except Exception as e:
-        reply = f"(LLM error) {str(e)}"
+    async with SessionLocal() as session:
+        req = ChatRequest(
+            user_id=str(sender_id),  # 使用实际发送者的 ID (需要转换为 str)
+            message=content,
+            history=[] # 历史记录仍为空，见第二点解释
+        )
+        start_time = time.time()
+        try:
+            # 调用 MentalHealthChatbot 实例
+            res = global_chatbot_instance.handle_message(req)
+            reply = res.reply
+            
+            duration = time.time() - start_time
+            print(f"--- LLM Response Duration: {duration:.2f} seconds ---")
+        except Exception as e:
+            reply = f"(LLM error) Chatbot failed to generate reply. Error: {str(e)}"
 
-    bot_msg = Message(
-        user_id=None, content=encrypt(reply),
-        is_bot=True, group_id=group_id
-    )
-    session.add(bot_msg)
-    await session.commit()
-    await session.refresh(bot_msg)
+        bot_msg = Message(
+            user_id=None, content=encrypt(reply),
+            is_bot=True, group_id=group_id
+        )
+        session.add(bot_msg)
+        await session.commit()
+        await session.refresh(bot_msg)
 
-    await broadcast_message(session, bot_msg, group_id)
+        await broadcast_message(session, bot_msg, group_id)
 
 ###
     # routers
@@ -282,7 +310,7 @@ async def post_group_message(
 
     await broadcast_message(session, m, payload.group_id)
 
-    asyncio.create_task(maybe_answer_with_llm(session, payload.content, payload.group_id))
+    asyncio.create_task(maybe_answer_with_llm(token_data.user_id, payload.content, payload.group_id))
 
     return {"ok": True, "id": m.id}
     # return {"ok": True}

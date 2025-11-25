@@ -151,7 +151,7 @@ async def assign_my_therapist(
         await session.commit()
         return {"ok": True, "detail": "Therapist assigned, questionnaire pending."}
     
-    rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3307/groupchat")
+    rec = GroupRecommender(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
     recommendation = rec.recommend(token_data.user_id)
     questionnaire.recommendation = recommendation
 
