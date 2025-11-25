@@ -162,7 +162,7 @@ class SupportLLM:
         self.model.config.pad_token_id = self.tokenizer.eos_token_id
 
         # Generation knobs (constants)
-        self.max_new_tokens = 128
+        self.max_new_tokens = 1000
         self.temperature = 0.7
         self.top_p = 0.9
         self.repetition_penalty = 1.05
@@ -198,7 +198,9 @@ class SupportLLM:
                 repetition_penalty=self.repetition_penalty,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
-        text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        gen_ids = outputs[0]
+        new_ids = gen_ids[inputs["input_ids"].shape[1]:] 
+        text = self.tokenizer.decode(new_ids, skip_special_tokens=True).strip()
         return text.split(messages[-1]["content"])[-1].strip()
 
 
