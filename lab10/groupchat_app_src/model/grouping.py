@@ -182,3 +182,123 @@ class GroupRecommender:
             base_sql += " AND COALESCE((SELECT COUNT(*) FROM chat_group_users cgu WHERE cgu.group_id = g.id AND cgu.is_active=TRUE), 0) < g.max_size"
         return sess.execute(text(base_sql), {"m": self.embed_model_name}).fetchall()
 
+
+
+# ========= WRITE PATH (call only after approval) =========
+from sqlalchemy import text
+
+def _to_blob(v: np.ndarray) -> bytes:
+    return v.astype(np.float32, copy=False).tobytes()
+
+class GroupWriter:
+    """
+    Persist an approved decision:
+      - create a new group if needed
+      - add the user to chat_group_users
+      - initialize or update group_profiles (centroid, n_members, avg_sim)
+    """
+    def __init__(self, db_url: Optional[str] = None):
+        self.db_url = db_url or DEFAULT_DB_URL
+        self.engine = create_engine(self.db_url, pool_pre_ping=True)
+        self.Session = sessionmaker(bind=self.engine)
+
+    def _ensure_user_embedding(self, sess, user_id: int, embedder) -> np.ndarray:
+        row = sess.execute(text(
+            "SELECT dim, vec FROM user_questionnaire_embeddings WHERE user_id=:u"
+        ), {"u": user_id}).fetchone()
+        if row:
+            return _l2(_from_blob(row.vec, row.dim))
+
+        # compute from questionnaire (same renderer as your recommender)
+        qrow = sess.execute(text(
+            "SELECT answers FROM user_questionnaires WHERE user_id=:u"
+        ), {"u": user_id}).fetchone()
+        if not qrow:
+            raise RuntimeError("No questionnaire answers for user")
+        q = qrow.answers if isinstance(qrow.answers, dict) else json.loads(qrow.answers)
+
+        # reuse the recommender’s text rendering
+        rec = GroupRecommender(self.db_url, embed_model=EMBED_MODEL, drop_sensitive=DROP_SENSITIVE)
+        text_blob = rec._render_questionnaire_text(q)
+        v = rec.embedder.encode([text_blob], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
+
+        # cache it for next time
+        sess.execute(text("""
+            INSERT INTO user_questionnaire_embeddings (user_id, model, dim, vec)
+            VALUES (:u, :m, :d, :v)
+            ON CONFLICT(user_id) DO UPDATE SET model=:m, dim=:d, vec=:v
+        """), {"u": user_id, "m": EMBED_MODEL, "d": int(v.shape[0]), "v": _to_blob(v)})
+        return v
+
+    def _create_group(self, sess) -> int:
+        # keep schema minimal; g.max_size has a default in your DB
+        gid = sess.execute(text(
+            "INSERT INTO chat_groups (is_active) VALUES (TRUE)"
+        )).lastrowid
+        return int(gid)
+
+    def _add_member(self, sess, group_id: int, user_id: int):
+        sess.execute(text("""
+            INSERT INTO chat_group_users (group_id, user_id, is_active)
+            VALUES (:g, :u, TRUE)
+            ON CONFLICT(group_id, user_id) DO UPDATE SET is_active=TRUE
+        """), {"g": group_id, "u": user_id})
+
+    def _init_profile(self, sess, group_id: int, e: np.ndarray):
+        sess.execute(text("""
+            INSERT INTO group_profiles (group_id, model, dim, centroid, n_members, avg_sim)
+            VALUES (:g, :m, :d, :c, 1, 1.0)
+            ON CONFLICT(group_id) DO UPDATE SET model=:m, dim=:d, centroid=:c, n_members=1, avg_sim=1.0
+        """), {"g": group_id, "m": EMBED_MODEL, "d": int(e.shape[0]), "c": _to_blob(_l2(e))})
+
+    def _update_centroid_incremental(self, sess, group_id: int, e: np.ndarray):
+        row = sess.execute(text("""
+            SELECT dim, centroid, n_members, avg_sim
+            FROM group_profiles WHERE group_id=:g
+        """), {"g": group_id}).fetchone()
+
+        if not row or row.centroid is None:
+            self._init_profile(sess, group_id, e)
+            return
+
+        dim = int(row.dim)
+        c_old = _from_blob(row.centroid, dim)
+        n_old = int(row.n_members or 0)
+        e_n = _l2(e)
+        c_new_raw = (c_old * max(n_old, 1) + e_n) / (max(n_old, 1) + 1)
+        c_new = _l2(c_new_raw)
+
+        sim_new = float(np.dot(c_new, e_n))
+        avg_old = float(row.avg_sim or 0.0)
+        avg_new = ((avg_old * n_old) + sim_new) / (n_old + 1)
+
+        sess.execute(text("""
+            UPDATE group_profiles
+            SET centroid=:c, n_members=:n, avg_sim=:a
+            WHERE group_id=:g
+        """), {"c": _to_blob(c_new), "n": n_old + 1, "a": avg_new, "g": group_id})
+
+    def apply_decision(self, user_id: int, decision: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        decision: the dict returned by GroupRecommender.recommend(...)
+        """
+        with self.Session.begin() as sess:
+            # 1) embedding (compute/cache if missing)
+            rec = GroupRecommender(self.db_url, embed_model=EMBED_MODEL, drop_sensitive=DROP_SENSITIVE)
+            e = self._ensure_user_embedding(sess, user_id, rec.embedder)
+
+            # 2) pick/create group
+            dec = decision.get("decision")
+            if dec == "group" and decision.get("group_id"):
+                gid = int(decision["group_id"])
+            elif dec == "new_group":
+                gid = self._create_group(sess)
+            else:
+                raise ValueError(f"Unsupported decision payload: {decision}")
+
+            # 3) ensure group active, add member, update centroid
+            sess.execute(text("UPDATE chat_groups SET is_active=TRUE WHERE id=:g"), {"g": gid})
+            self._add_member(sess, gid, user_id)
+            self._update_centroid_incremental(sess, gid, e)
+
+            return {"ok": True, "group_id": gid}
