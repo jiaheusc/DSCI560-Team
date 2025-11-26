@@ -68,6 +68,7 @@ class ChatGroups(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     group_name: Mapped[str] = mapped_column(String(50))
+    is_ai_1on1: Mapped[bool] = mapped_column(Boolean(), default=False)
     current_size: Mapped[int] = mapped_column(nullable=False, default=0) 
     max_size: Mapped[int] = mapped_column(nullable=False, default=10)
     

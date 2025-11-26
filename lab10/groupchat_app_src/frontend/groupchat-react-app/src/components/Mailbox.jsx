@@ -27,7 +27,7 @@ const Mailbox = () => {
       const data = await getTherapistUserProfile(targetId, token);
       setRecipient({
         id: data.user_id,   
-        name: data.name
+        name: data.prefer_name || data.username || `User ${data.user_id}`
       });
       setStatus("");
     } catch {

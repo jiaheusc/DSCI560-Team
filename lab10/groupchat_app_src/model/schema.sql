@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS chat_groups (
     id INT AUTO_INCREMENT PRIMARY KEY,
     group_name VARCHAR(50),
+    is_ai_1on1 BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- NEW: group capacity for assignment-on-arrival

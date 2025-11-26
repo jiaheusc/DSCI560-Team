@@ -2,7 +2,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-from db import Message, ChatGroups, ChatGroupUsers, User, UserRole, get_db
+from db import Message, ChatGroups, ChatGroupUsers, User, UserRole, UserProfile, get_db
 from auth import get_current_user_token, verify_websocket_token
 from websocket_manager import ConnectionManager
 from llm import chat_completion
@@ -13,8 +13,9 @@ from model.red_flag_detector import check_both, batch_check_both
 from model.chatbot import MentalHealthChatbot
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, 
-    ChatGroupCreate, ChatGroupListResponse, ChatGroupUpdate, 
-    ChatGroupResponse, MemberAdd, ChatRequest
+    ChatGroupCreate, ChatGroupWithAICreate, ChatGroupListResponse, 
+    GroupMembersListResponse, ChatGroupUpdate, ChatGroupResponse, 
+    MemberAdd, ChatRequest, UserPublicDetail
 )
 router = APIRouter(prefix="/api", tags=["Group Chat"])
 
@@ -87,7 +88,7 @@ async def maybe_answer_with_llm(sender_id: int, content: str, group_id: int):
             print(f"--- LLM Response Duration: {duration:.2f} seconds ---")
         except Exception as e:
             reply = f"(LLM error) Chatbot failed to generate reply. Error: {str(e)}"
-
+        print(reply)
         bot_msg = Message(
             user_id=None, content=encrypt(reply),
             is_bot=True, group_id=group_id
@@ -142,6 +143,42 @@ async def create_group(
         for u in users
     ]
     session.add_all(members)
+    await session.commit()
+    await session.refresh(group)
+
+    return group.id
+
+
+@router.post("/chat-groups/ai-1on1")
+async def create_group(
+    payload: ChatGroupWithAICreate,
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    if token_data.role != UserRole.therapist:
+        raise HTTPException(403, "Only therapist can create group")
+
+    if not payload.usernames:
+        raise HTTPException(400, "user cannot be empty.")
+
+    stmt = select(User).where(User.username == payload.username)
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(404, f"User not found: {payload.username}")
+    
+    group = ChatGroups(
+        group_name=payload.group_name,
+        is_ai_1on1=True,
+        current_size=1, 
+        is_active=True
+    )
+    session.add(group)
+    await session.flush()
+
+    member = ChatGroupUsers(group_id=group.id, user_id=user.id, is_active=True)
+    session.add_all(member)
     await session.commit()
     await session.refresh(group)
 
@@ -206,6 +243,46 @@ async def list_my_groups(
     )
     groups = (await session.execute(stmt)).scalars().all()
     return {"groups": groups}
+
+# list group's user info
+@router.get("/chat-groups/{group_id}/members", response_model=GroupMembersListResponse)
+async def list_group_members(
+    group_id: int,
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(User, UserProfile)
+        .join(ChatGroupUsers, User.id == ChatGroupUsers.user_id)
+        .outerjoin(UserProfile, User.id == UserProfile.user_id)
+        .where(ChatGroupUsers.group_id == group_id)
+    )
+
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    if not rows:
+        return GroupMembersListResponse(ok=True, members=[])
+
+
+    members: list[UserPublicDetail] = []
+    for user, profile in rows:
+        avatar_url  = profile.avatar_url if profile and profile.prefer_name else None
+        prefer_name = profile.prefer_name if profile and profile.prefer_name else ""
+        bio         = profile.bio if profile and profile.bio else ""
+
+        members.append(
+            UserPublicDetail(
+                user_id=user.id,
+                username=user.username,
+                avatar_url=avatar_url,
+                prefer_name=prefer_name,
+                bio=bio,
+            )
+        )
+
+    return GroupMembersListResponse(ok=True, members=members)
+
 
 # change group name
 @router.post("/chat-groups/{group_id}", response_model=ChatGroupResponse)

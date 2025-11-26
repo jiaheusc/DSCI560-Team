@@ -34,7 +34,7 @@ class UserPublicDetail(BaseModel):
 
     class Config:
         from_attributes = True
-
+   
 class UserPrivateDetail(BaseModel):
     user_id: int
     avatar_url: Optional[str] = None
@@ -157,13 +157,21 @@ class GroupMessageResponse(BaseModel):
 class GroupMessageListResponse(BaseModel):
     messages: List[GroupMessageResponse]
 
+class GroupMembersListResponse(BaseModel):
+    ok: bool = True
+    members: List[UserPublicDetail]
+
 class ChatGroupCreate(BaseModel):
     group_name: Optional[str] = "new group"
     usernames: List[str]
 
+class ChatGroupWithAICreate(BaseModel):
+    usernames: str
+
 class ChatGroupResponse(BaseModel):
     id: int
     group_name: Optional[str]
+    is_ai_1on1: bool
     is_active: bool
 
     class Config:
