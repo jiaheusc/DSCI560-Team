@@ -12,7 +12,8 @@ const Chat = () => {
   const [editingName, setEditingName] = useState("");
   const wsRef = useRef(null);
   const bottomRef = useRef(null);
-
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningType, setWarningType] = useState("");
   // scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -89,22 +90,34 @@ const Chat = () => {
 
   // send chat message
   const sendMessage = async () => {
-    if (!input.trim()) return;
+  if (!input.trim()) return;
 
-    const res = await fetch("/api/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        group_id: groupId,
-        content: input   // <-- must match backend
-      })
-    });
+  const res = await fetch("/api/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      group_id: groupId,
+      content: input
+    })
+  });
 
-    if (res.ok) setInput("");
-  };
+  const data = await res.json();
+
+  // ---- Danger detected ----
+  if (data.ok === false) {
+    console.warn("⚠ Danger detected:", data.detail);
+    setWarningType(data.detail);
+    setShowWarning(true);
+    return; // 不发送消息
+  }
+
+  // normal OK
+  setInput("");
+};
+
 
   return (
   <div className="chat-container">
@@ -221,6 +234,61 @@ const Chat = () => {
       )}
 
     </div>
+
+    {/* ⚠ 危险内容警告弹窗 */}
+    {showWarning && (
+  <div className="modal-overlay">
+    <div className="modal-box">
+
+      <h3>We detected something important</h3>
+
+      {warningType === "self_harm" && (
+        <p>
+          Your message indicates you may be going through a difficult moment.  
+          Would you like to talk privately with our AI assistant?
+        </p>
+      )}
+
+      {warningType === "hate" && (
+        <p>
+          Your message contains harmful language.  
+          Would you prefer to continue privately with AI?
+        </p>
+      )}
+
+      <div className="modal-buttons">
+        <button
+          className="modal-btn-primary"
+          onClick={() => {
+            setShowWarning(false);
+
+            // ➤ 从 groups 中找到 AI 群
+            const aiGroup = groups.find(g => g.is_ai_1on1 === true);
+
+            if (!aiGroup) {
+              alert("AI chat not found. (should not happen)");
+              return;
+            }
+
+            // ➤ 进入 AI 群聊
+            handleSelectGroup(aiGroup.id);
+          }}
+        >
+          Talk to AI
+        </button>
+
+        <button
+          className="modal-btn-secondary"
+          onClick={() => setShowWarning(false)}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
   </div>
 );
 
