@@ -165,9 +165,6 @@ class ChatGroupCreate(BaseModel):
     group_name: Optional[str] = "new group"
     usernames: List[str]
 
-class ChatGroupWithAICreate(BaseModel):
-    usernames: str
-
 class ChatGroupResponse(BaseModel):
     id: int
     group_name: Optional[str]

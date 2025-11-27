@@ -13,9 +13,8 @@ from model.red_flag_detector import check_both, batch_check_both
 from model.chatbot import MentalHealthChatbot
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, 
-    ChatGroupCreate, ChatGroupWithAICreate, ChatGroupListResponse, 
-    GroupMembersListResponse, ChatGroupUpdate, ChatGroupResponse, 
-    MemberAdd, ChatRequest, UserPublicDetail
+    ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, 
+    ChatGroupUpdate, ChatGroupResponse, MemberAdd, ChatRequest, UserPublicDetail
 )
 router = APIRouter(prefix="/api", tags=["Group Chat"])
 
@@ -151,26 +150,17 @@ async def create_group(
 
 @router.post("/chat-groups/ai-1on1")
 async def create_group(
-    payload: ChatGroupWithAICreate,
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
-    if token_data.role != UserRole.therapist:
-        raise HTTPException(403, "Only therapist can create group")
-
-    if not payload.usernames:
-        raise HTTPException(400, "user cannot be empty.")
-
-    stmt = select(User).where(User.username == payload.username)
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
-
+    user = await session.get(User, token_data.user_id)
     if user is None:
-        raise HTTPException(404, f"User not found: {payload.username}")
+        raise HTTPException(404, "User not found")
     
     group = ChatGroups(
-        group_name=payload.group_name,
+        group_name=f"{user.username} & WeMind AI",
         is_ai_1on1=True,
+        max_size=1,
         current_size=1, 
         is_active=True
     )
@@ -178,7 +168,7 @@ async def create_group(
     await session.flush()
 
     member = ChatGroupUsers(group_id=group.id, user_id=user.id, is_active=True)
-    session.add_all(member)
+    session.add(member)
     await session.commit()
     await session.refresh(group)
 
