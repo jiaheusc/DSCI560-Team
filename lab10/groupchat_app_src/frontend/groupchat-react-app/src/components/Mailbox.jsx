@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getMailbox, getTherapistUserProfile, sendMail,approveUser, markMailRead,getMailPartner } from "../api";
+import { getMailbox, getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
 const Mailbox = () => {
   const { token, role } = useAuth();
@@ -80,10 +80,53 @@ const Mailbox = () => {
     }
   };
 
-  const handleApprove = async (userId) => {
-    await approveUser(userId, token);   
-    load();
+  const handleApprove = async (mailItem) => {
+    const userId = mailItem.from_user;
+    const username = mailItem.from_name || `user_${userId}`;
+
+    const rec = mailItem.content?.recommendation;
+
+    if (!rec) {
+      alert("No AI recommendation found.");
+      return;
+    }
+
+    try {
+      let finalGroupId = null;
+
+      // Case 1 — system detected no groups configured
+      if (rec.decision === "no_groups_configured") {
+        const gid = await createAutoGroup(username, token);
+        finalGroupId = gid;
+        console.log("✔ Created new group:", gid);
+      }
+
+      // Case 2 — AI recommended new group
+      else if (rec.decision === "new_group") {
+        const gid = await createAutoGroup(username, token);
+        finalGroupId = gid;
+        console.log("✔ Created AI recommended new group:", gid);
+      }
+
+      // Case 3 — AI recommended existing group
+      else if (rec.decision === "group" && rec.group_id) {
+        await addUserToGroup(rec.group_id, username, token);
+        finalGroupId = rec.group_id;
+        console.log("✔ Added user to existing group:", rec.group_id);
+      }
+
+      await approveUser(userId, token);
+
+      alert(`User approved and assigned to group ${finalGroupId}`);
+
+      load(); // refresh mailbox
+
+    } catch (err) {
+      console.error("Approve error:", err);
+      alert("❌ Failed to approve user or assign group.");
+    }
   };
+
 
   const labels = {
     age: "Age Range",
@@ -312,7 +355,7 @@ const Mailbox = () => {
               {role === "therapist" && (
                 <button
                   className="mailbox-accept-btn"
-                  onClick={() => handleApprove(m.from_user)}
+                  onClick={() => handleApprove(m)}
                 >
                   ✅ Accept User
                 </button>

@@ -149,7 +149,7 @@ async def create_group(
 
 
 @router.post("/chat-groups/ai-1on1")
-async def create_group(
+async def create_ai_group(
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):

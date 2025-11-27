@@ -8,7 +8,6 @@ import UserHome from "./components/UserHome";
 import TherapistHome from "./components/TherapistHome";
 import Mailbox from "./components/Mailbox";
 import Chat from "./components/Chat";
-
 import ProfilePage from "./components/ProfilePage";   
 import TherapistPublicProfile from "./pages/TherapistPublicProfile";
 

@@ -36,6 +36,10 @@ export const submitQuestionnaire = (answers, token) =>
 export const getMailbox = (token) =>
   api("/mailbox", "GET", null, token);
 
+export const createAutoGroup = (username, token) =>
+  api("/chat-groups", "POST", { usernames: [username] }, token);
+export const addUserToGroup = (gid, username, token) =>
+  api(`/chat-groups/${gid}/member`, "POST", { username }, token);
 export const approveUser = (userId, token) =>
   api("/mailbox/approve", "POST", { user_id: userId }, token);
 
@@ -55,6 +59,9 @@ export const getTherapistUserProfile = (userId, token) =>
 // =====================
 // Chat Groups & Messages
 // =====================
+export const createAIChatGroup = (token) =>
+  api("/chat-groups/ai-1on1", "POST", null, token);
+
 export const getChatGroups = (token) =>
   api("/chat-groups", "GET", null, token);
 

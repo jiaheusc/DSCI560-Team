@@ -87,10 +87,27 @@ const ProfilePage = () => {
   };
 
   const saveProfile = async () => {
-    await cfg.update(edit, token);
+    if (!edit.prefer_name || edit.prefer_name.trim() === "") {
+      toastProfile("❌ Preferred Name is required");
+      return;
+    }
+    // ---- Number Parsing Logic ----
+    const sanitized = { ...edit };
+
+    cfg.fields.forEach(f => {
+      if (f.type === "number") {
+        if (sanitized[f.key] === "" || sanitized[f.key] === null) {
+          sanitized[f.key] = null;  
+        } else {
+          sanitized[f.key] = Number(sanitized[f.key]); 
+        }
+      }
+    });
+    await cfg.update(sanitized, token);
     toastProfile("Profile updated!");
     setTimeout(load, 300);
-  };
+};
+
 
   const saveAvatar = async (url) => {
     await cfg.update({ ...edit, avatar_url: url }, token);

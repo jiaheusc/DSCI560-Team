@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 import ConfidentialityModal from "./ConfidentialityModal";
-
+import { createAIChatGroup } from "../api";
 import {
     api,
     getMyUserProfile,
@@ -70,7 +70,7 @@ const Auth = () => {
       try {
         const prof = await api("/therapist/profile/status", "GET", null, jwtToken);
         if (!prof.ok) {
-          navigate("/therapist/profile");
+          navigate("/profile");
           return;
         }
         navigate("/therapist");
@@ -109,11 +109,20 @@ const Auth = () => {
 
   // modal agree → real signup
   const handleAgree = async () => {
-    setShowConsent(false);
+  const jwt = await signup(u, p);
+  if (!jwt) return;
 
-    const jwt = await signup(u, p);
-    if (jwt) goNextByToken(jwt);
-  };
+  try {
+    const resp = await createAIChatGroup(jwt); // 调整
+    console.log("AI group created:", resp);
+  } catch (err) {
+    console.error("AI group create error:", err);
+  }
+
+  goNextByToken(jwt);
+};
+
+
 
   const handleDecline = () => {
     setShowConsent(false);

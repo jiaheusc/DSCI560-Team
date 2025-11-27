@@ -47,7 +47,7 @@ const TherapistPicker = ({ onClose, onChosen }) => {
               }}
               onClick={() => openProfile(t)}
             >
-              {t.prefer_name || t.username}
+              {t.prefer_name || `Therapist ${t.user_id}`}
             </span>
 
             <button onClick={() => choose(t.user_id)}>Select</button>
