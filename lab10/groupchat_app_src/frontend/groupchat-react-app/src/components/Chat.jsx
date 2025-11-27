@@ -7,7 +7,9 @@ const Chat = () => {
   const [groupId, setGroupId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-
+  const [groupInfo, setGroupInfo] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [editingName, setEditingName] = useState("");
   const wsRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -62,11 +64,28 @@ const Chat = () => {
   };
 
   // user selects group
-  const handleSelectGroup = (gid) => {
+  const handleSelectGroup = async (gid) => {
     setGroupId(gid);
-    loadMessages(gid);
+
+    // load messages
+    await loadMessages(gid);
+
+    // load members
+    const memRes = await fetch(`/api/chat-groups/${gid}/members`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const mem = await memRes.json();
+    setMembers(mem.members || []);
+
+    // load group info
+    const info = groups.find(g => g.id === gid);
+    setGroupInfo(info);
+    setEditingName(info.group_name);
+
+    // connect websocket
     connectWS(gid);
   };
+
 
   // send chat message
   const sendMessage = async () => {
@@ -119,6 +138,47 @@ const Chat = () => {
 
       {groupId && (
         <>
+          {/* ⭐ 聊天顶部栏（群名 + 成员头像）⭐ */}
+          <div className="chat-header">
+
+            {/* 群名可编辑 */}
+            <div className="group-name-box">
+              <input
+                className="group-name-input"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+              />
+              <button
+                className="group-name-save-btn"
+                onClick={async () => {
+                  await fetch(`/api/chat-groups/${groupId}`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ group_name: editingName })
+                  });
+                  // reload group list so sidebar updates
+                  loadGroups();
+                }}
+              >
+                Save
+              </button>
+            </div>
+
+            {/* 头像列表 */}
+            <div className="member-avatar-list">
+              {members.map((m) => (
+                <img
+                  key={m.user_id}
+                  src={m.avatar_url || "/static/avatars/default.png"}
+                  className="member-avatar"
+                  title={m.prefer_name || m.username}
+                />
+              ))}
+            </div>
+          </div>
           {/* 聊天内容区 */}
           <div className="chat-msg-list">
             {messages.map((m) => {

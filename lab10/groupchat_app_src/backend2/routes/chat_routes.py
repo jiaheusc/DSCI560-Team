@@ -241,6 +241,10 @@ async def list_group_members(
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
+    group = await session.get(ChatGroups, group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+
     stmt = (
         select(User, UserProfile)
         .join(ChatGroupUsers, User.id == ChatGroupUsers.user_id)
@@ -248,16 +252,12 @@ async def list_group_members(
         .where(ChatGroupUsers.group_id == group_id)
     )
 
-    result = await session.execute(stmt)
-    rows = result.all()
-
-    if not rows:
-        return GroupMembersListResponse(ok=True, members=[])
-
+    rows = (await session.execute(stmt)).all()
 
     members: list[UserPublicDetail] = []
+
     for user, profile in rows:
-        avatar_url  = profile.avatar_url if profile and profile.prefer_name else None
+        avatar_url  = profile.avatar_url if profile and profile.avatar_url else None
         prefer_name = profile.prefer_name if profile and profile.prefer_name else ""
         bio         = profile.bio if profile and profile.bio else ""
 
@@ -268,6 +268,17 @@ async def list_group_members(
                 avatar_url=avatar_url,
                 prefer_name=prefer_name,
                 bio=bio,
+            )
+        )
+
+    if group.is_ai_1on1:
+        members.append(
+            UserPublicDetail(
+                user_id=0,                    
+                username="WeMind AI",
+                avatar_url="/static/avatars/ai.png",
+                prefer_name="WeMind AI",
+                bio="AI assistant"
             )
         )
 
