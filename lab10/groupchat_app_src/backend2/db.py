@@ -116,8 +116,8 @@ class Message(Base):
     group_id: Mapped[int] = mapped_column(
         ForeignKey("chat_groups.id", ondelete="CASCADE"), nullable=False
     )
-
     content: Mapped[str] = mapped_column(Text)
+    is_visible: Mapped[bool] = mapped_column(Boolean(), default=True)
     is_bot: Mapped[bool] = mapped_column(Boolean(), default=False)
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())

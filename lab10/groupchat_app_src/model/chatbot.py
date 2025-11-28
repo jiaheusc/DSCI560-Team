@@ -291,7 +291,7 @@ class MentalHealthChatbot:
         )
     
         # ========= NEW: crisis/hate auto-response =========
-    def respond_to_flagged(self, tag: str, message: str, recent_messages: list[str]) -> str:
+    async def respond_to_flagged(self, tag: str, message: str, recent_messages: list[str]) -> str:
         """
         Create an immediate AI response when moderation tagged a message.
         tag: "self-harm" or "hate"

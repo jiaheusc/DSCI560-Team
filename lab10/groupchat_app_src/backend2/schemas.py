@@ -144,10 +144,17 @@ class MessagePayload(BaseModel):
     content: str
     group_id: int
 
+class MessageResponse(BaseModel):
+    ok: bool
+    id: int
+    intervention_text: Optional[str] = None
+    detail: Optional[str] = None
+
 class GroupMessageResponse(BaseModel):
     id: int
     username: str
     content: str
+    is_visible: bool
     is_bot: bool
     created_at: datetime 
     

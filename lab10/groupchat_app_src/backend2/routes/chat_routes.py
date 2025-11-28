@@ -12,7 +12,7 @@ from utils.security import encrypt, decrypt
 from model.red_flag_detector import check_both, batch_check_both
 from model.chatbot import MentalHealthChatbot
 from schemas import (
-    TokenData, MessagePayload, GroupMessageListResponse, 
+    TokenData, MessagePayload, GroupMessageListResponse, MessageResponse,
     ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, 
     ChatGroupUpdate, ChatGroupResponse, MemberAdd, ChatRequest, UserPublicDetail
 )
@@ -36,7 +36,7 @@ class UserConnectionManager:
             await ws.send_json(message)
 
 manager = UserConnectionManager()
-global_chatbot_instance = MentalHealthChatbot()
+chatbot = MentalHealthChatbot()
 
 async def broadcast_message(session: AsyncSession, msg: Message, group_id: int):
     username = None
@@ -73,14 +73,13 @@ async def maybe_answer_with_llm(sender_id: int, content: str, group_id: int):
 
     async with SessionLocal() as session:
         req = ChatRequest(
-            user_id=str(sender_id),  # 使用实际发送者的 ID (需要转换为 str)
+            user_id=str(sender_id),
             message=content,
-            history=[] # 历史记录仍为空，见第二点解释
+            history=[] # 历史记录为空
         )
         start_time = time.time()
         try:
-            # 调用 MentalHealthChatbot 实例
-            res = global_chatbot_instance.handle_message(req)
+            res = chatbot.handle_message(req)
             reply = res.reply
             
             duration = time.time() - start_time
@@ -346,20 +345,22 @@ async def get_group_messages(
             "id": m.id,
             "username": "LLM Bot" if m.is_bot else username,
             "content": decrypt(m.content),
+            "is_visible": m.is_visible,
             "is_bot": m.is_bot,
             "created_at": str(m.created_at)
         })
     return {"messages": out}
 
-@router.post("/messages")
+@router.post("/messages", response_model=MessageResponse)
 async def post_group_message(
     payload: MessagePayload,
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
+    group_id = payload.group_id
     # check membership
     stmt = select(ChatGroupUsers).where(
-        ChatGroupUsers.group_id == payload.group_id,
+        ChatGroupUsers.group_id == group_id,
         ChatGroupUsers.user_id == token_data.user_id,
         ChatGroupUsers.is_active == True
     )
@@ -369,16 +370,23 @@ async def post_group_message(
     # check proper language
     result: Dict[str, str] = check_both(payload.content)
     
-    print(f"content: {payload.content}")
-    print(result)
+    is_visible = True
+    intervention_needed = False
+    flag_type = None
+
     if result.get("self_harm") == "FAIL":
-        return {"ok": False, "detail": "self_harm"}
-    if result.get("hate") == "FAIL":
-        return {"ok": False, "detail": "hate"}
-    
+        is_visible = False
+        intervention_needed = True
+        flag_type = "self_harm"
+    elif result.get("hate") == "FAIL":
+        is_visible = False
+        intervention_needed = True
+        flag_type = "hate"
+
     m = Message(
         user_id=token_data.user_id,
         content=encrypt(payload.content),
+        is_visible=is_visible,
         is_bot=False,
         group_id=payload.group_id
     )
@@ -386,14 +394,41 @@ async def post_group_message(
     await session.commit()
     await session.refresh(m)
 
-    await broadcast_message(session, m, payload.group_id)
+    if intervention_needed:
+        stmt = (
+            select(Message)
+            .where(Message.group_id == group_id)
+            .order_by(Message.created_at.desc())
+            .limit(10)
+        )
 
-    asyncio.create_task(maybe_answer_with_llm(token_data.user_id, payload.content, payload.group_id))
+        msgs = list(reversed((await session.execute(stmt)).scalars().all()))
 
-    return {"ok": True, "id": m.id}
-    # return {"ok": True}
-
-
+        recent_msgs = []
+        for msg in msgs:
+            try:
+                content = decrypt(msg.content)
+                recent_msgs.append(content)
+            except Exception:
+                pass
+        
+        reply = await chatbot.respond_to_flagged(
+            tag = flag_type,
+            message = payload.content,
+            recent_messages = recent_msgs
+        )
+        return {
+            "ok": False, 
+            "id": m.id, 
+            "detail": flag_type,
+            "intervention_text": reply
+        }
+    else:
+        await broadcast_message(session, m, payload.group_id)
+        asyncio.create_task(maybe_answer_with_llm(token_data.user_id, payload.content, payload.group_id))
+        return {"ok": True, "id": m.id}
+    
+    
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket, 
