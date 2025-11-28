@@ -39,8 +39,7 @@ const TherapistHome = () => {
         Edit Profile
       </button>
 
-      {/* Chat */}
-      <button onClick={() => navigate("/chat")}>Chat</button>
+      {/* <button onClick={() => navigate("/chat")}>Chat</button> */}
 
       {/* Mailbox with badge */}
       <button
@@ -69,7 +68,11 @@ const TherapistHome = () => {
           </span>
         )}
       </button>
-
+      {/* AI Summary */}
+      <button onClick={() => navigate("/ai-summary")}>
+        AI Summary
+      </button>
+      {/* Logout */}
       <button style={{ background: "#ccc" }} onClick={logout}>
         Log out
       </button>

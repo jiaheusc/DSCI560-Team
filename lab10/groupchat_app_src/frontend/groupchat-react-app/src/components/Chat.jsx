@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../AuthContext";
-
+import { useNavigate } from "react-router-dom";
 const Chat = () => {
   const { token, userId } = useAuth();
   const [groups, setGroups] = useState([]);
@@ -14,6 +14,7 @@ const Chat = () => {
   const bottomRef = useRef(null);
   const [showWarning, setShowWarning] = useState(false);
   const [warningType, setWarningType] = useState("");
+  const navigate = useNavigate();
   // scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,7 +112,7 @@ const Chat = () => {
     console.warn("⚠ Danger detected:", data.detail);
     setWarningType(data.detail);
     setShowWarning(true);
-    return; // 不发送消息
+    return; 
   }
 
   // normal OK
@@ -122,8 +123,19 @@ const Chat = () => {
   return (
   <div className="chat-container">
 
-    {/* 左侧群组列表 */}
+    {/* Left Group List */}
     <div className="chat-sidebar">
+      <button
+            onClick={() => navigate("/therapist")}
+            style={{
+            padding: "8px 14px",
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            cursor: "pointer"
+            }}
+        >
+            ← Home
+        </button>
       <h3>Your Groups</h3>
       {groups.length === 0 && <p>No groups yet.</p>}
 
@@ -142,7 +154,7 @@ const Chat = () => {
       })}
     </div>
 
-    {/* 右侧聊天区 */}
+    {/* Right Chat Area */}
     <div className="chat-main">
 
       {!groupId && (
@@ -151,10 +163,10 @@ const Chat = () => {
 
       {groupId && (
         <>
-          {/* ⭐ 聊天顶部栏（群名 + 成员头像）⭐ */}
+          {/* Chat Header (Group Name + Member Avatars)  */}
           <div className="chat-header">
 
-            {/* 群名可编辑 */}
+            {/* Editable Group Name */}
             <div className="group-name-box">
               <input
                 className="group-name-input"
@@ -180,7 +192,7 @@ const Chat = () => {
               </button>
             </div>
 
-            {/* 头像列表 */}
+            {/* Avatar List */}
             <div className="member-avatar-list">
               {members.map((m) => (
                 <img
@@ -192,7 +204,7 @@ const Chat = () => {
               ))}
             </div>
           </div>
-          {/* 聊天内容区 */}
+          {/* Chat Message List */}
           <div className="chat-msg-list">
             {messages.map((m) => {
               const isMe = m.user_id === userId;
@@ -221,7 +233,7 @@ const Chat = () => {
             <div ref={bottomRef}></div>
           </div>
 
-          {/* 输入框 */}
+          {/* Input Bar */}
           <div className="chat-input-bar">
             <input
               value={input}
@@ -235,7 +247,7 @@ const Chat = () => {
 
     </div>
 
-    {/* ⚠ 危险内容警告弹窗 */}
+    {/* ⚠ Danger Warning Modal */}
     {showWarning && (
   <div className="modal-overlay">
     <div className="modal-box">
@@ -262,7 +274,7 @@ const Chat = () => {
           onClick={() => {
             setShowWarning(false);
 
-            // ➤ 从 groups 中找到 AI 群
+            // find AI 1-on-1 group
             const aiGroup = groups.find(g => g.is_ai_1on1 === true);
 
             if (!aiGroup) {
@@ -270,7 +282,7 @@ const Chat = () => {
               return;
             }
 
-            // ➤ 进入 AI 群聊
+            // Enter AI group chat
             handleSelectGroup(aiGroup.id);
           }}
         >
