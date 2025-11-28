@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { getMailbox, getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
+import { useNavigate } from "react-router-dom";
 const Mailbox = () => {
   const { token, role } = useAuth();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState({});
   const [showSend, setShowSend] = useState(false);
   const [targetId, setTargetId] = useState("");
+  const navigate = useNavigate();
   const [recipient, setRecipient] = useState(null);
   const [msg, setMsg] = useState("");
   const [status, setStatus] = useState("");
@@ -145,9 +147,37 @@ const Mailbox = () => {
   };
 
   return (
+    
     <div className="mailbox-container">
+      <div className="mailbox-header-bar"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20
+        }}
+      >
+        {/* Back Home */}
+        <button
+          onClick={() => window.history.back()}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            cursor: "pointer"
+          }}
+        >
+          ← Home
+        </button>
+
+        {/* Title */}
+        <h2 style={{ margin: 0 }}>Mailbox</h2>
+
+        {/* placeholder 保持居中对齐 */}
+        <div style={{ width: 90 }}></div>
+      </div>
+
       <div className="mailbox-header-row">
-        <h2 className="mailbox-header">📬 Mailbox</h2>
         <button className="mailbox-send-btn" onClick={() => setShowSend(true)}>
           Send
         </button>

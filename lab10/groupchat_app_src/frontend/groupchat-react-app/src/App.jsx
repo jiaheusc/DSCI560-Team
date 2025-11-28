@@ -10,7 +10,7 @@ import Mailbox from "./components/Mailbox";
 import Chat from "./components/Chat";
 import ProfilePage from "./components/ProfilePage";   
 import TherapistPublicProfile from "./pages/TherapistPublicProfile";
-
+import AiSummary from "./pages/AiSummary";
 const App = () => {
   const { token, role } = useAuth();
 
@@ -53,6 +53,8 @@ const App = () => {
 
           {/* Shared chat */}
           <Route path="/chat" element={requireAuth(<Chat />)} />
+          {/* AI Summary (therapist) */}
+          <Route path="/ai-summary" element={<AiSummary />} />
 
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
