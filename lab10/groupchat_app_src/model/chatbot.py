@@ -289,6 +289,143 @@ class MentalHealthChatbot:
             resources=[],
             flagged_risk=False
         )
+    
+        # ========= NEW: crisis/hate auto-response =========
+    def respond_to_flagged(self, tag: str, message: str, recent_messages: list[str]) -> str:
+        """
+        Create an immediate AI response when moderation tagged a message.
+        tag: "self-harm" or "hate"
+        message: the triggering message text
+        recent_messages: last ~10 chat messages as plain strings (oldest -> newest)
+        """
+        tag = (tag or "").strip().lower()
+        recent = recent_messages[-10:] if recent_messages else []
+
+        if tag == "self-harm":
+            system = (
+                "You are a crisis-aware, supportive assistant in a moderated group chat. "
+                "Someone posted a message indicating possible self-harm or suicidal risk. "
+                "Your goals: (1) respond with empathy and validation, (2) encourage immediate human help "
+                "(trusted people, local emergency services, or national lifelines), (3) share brief, safe grounding steps, "
+                "(4) avoid instructions or encouragement for self-harm, (5) avoid diagnosis, (6) keep it concise."
+            )
+        elif tag == "hate":
+            system = (
+                "You are a group-chat assistant that handles harassment/hate content with de-escalation. "
+                "Your goals: (1) acknowledge harm and set boundaries using platform/community norms, "
+                "(2) de-escalate and redirect to respectful dialogue, (3) remind about inclusivity and safety, "
+                "(4) avoid shaming; be firm but calm, (5) avoid diagnosis, (6) keep it concise."
+            )
+        else:
+            # Default to safe supportive behavior
+            system = (
+                "You are a supportive assistant in a group chat. "
+                "Respond with empathy, safety, and respect. Avoid diagnosis and keep it concise."
+            )
+
+        # Build a short context string for the model
+        ctx_lines = [f"- {m}" for m in recent] if recent else []
+        context_blob = "Recent chat (last {}):\n{}\n".format(
+            len(ctx_lines), "\n".join(ctx_lines)
+        ) if ctx_lines else "Recent chat: (no prior context)\n"
+
+        user_prompt = (
+            f"{context_blob}\n"
+            "Flagged message:\n"
+            f"\"{message}\"\n\n"
+            "Compose one short response (3–6 sentences) following the goals above."
+        )
+
+        reply = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt)
+        # belt-and-suspenders: ensure no hard diagnosis language slips through
+        reply = enforce_no_diagnosis(reply)
+        return reply.strip()
+
+    # ========= NEW: per-user summary + mood =========
+    def summarize_group(self, messages_by_user: dict[str, any]) -> dict[str, dict[str, str]]:
+        """
+        Summarize each user's message(s) and infer a short free-text mood phrase.
+        messages_by_user: { user_id: "msg" | [msgs...] }
+        Returns: { user_id: { "summary": str, "mood": str } }
+        """
+        # Normalize to compact text per user
+        normalized = {}
+        for uid, msg in (messages_by_user or {}).items():
+            if isinstance(msg, list):
+                text = " ".join(str(m) for m in msg if m)
+            else:
+                text = str(msg or "")
+            text = text.replace("\n", " ").strip()
+            if text:
+                normalized[uid] = text
+        if not normalized:
+            return {}
+
+        # Bound prompt size
+        MAX_CHARS = 6000
+        items = list(normalized.items())
+        blob_parts, total = [], 0
+        for uid, txt in items:
+            part = f"{uid}: {txt}"
+            if total + len(part) > MAX_CHARS:
+                break
+            blob_parts.append(part); total += len(part)
+        roster_blob = "\n".join(blob_parts)
+
+        # System prompt: free-text mood, keep concise
+        system = (
+            "You help a facilitator summarize a group chat without diagnosing. "
+            "For each user, provide: "
+            "1) a one-sentence summary (concise, neutral, no medical diagnosis), and "
+            "2) a SHORT mood/feeling/status phrase (2–5 words, free text, e.g., 'stressed and tired'). "
+            "Output STRICT JSON only:\n"
+            "{\"users\": {\"<user_id>\": {\"summary\": \"...\", \"mood\": \"...\"}, ...}}"
+        )
+        user_prompt = (
+            "Group messages:\n" + roster_blob +
+            "\n\nReturn ONLY the JSON object. No extra text."
+        )
+
+        # Use lower temperature for more stable JSON
+        orig_temp, orig_top_p, orig_rep = self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = 0.2, 0.95, 1.0
+        raw = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt)
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
+
+        # Parse JSON (robust)
+        import json, re
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            m = re.search(r"\{.*\}", raw, re.DOTALL)
+            parsed = json.loads(m.group(0)) if m else {"users": {}}
+
+        users = parsed.get("users") if isinstance(parsed, dict) else {}
+        if not isinstance(users, dict):
+            # Fallback if parsing failed
+            return {
+                uid: {
+                    "summary": (txt[:180] + "...") if len(txt) > 180 else txt,
+                    "mood": "neutral tone"
+                } for uid, txt in normalized.items()
+            }
+
+        # Post-process: trim lengths, enforce no-diagnosis safety
+        out = {}
+        for uid, obj in users.items():
+            if not isinstance(obj, dict): 
+                continue
+            summary = str(obj.get("summary", "")).strip()
+            mood = str(obj.get("mood", "")).strip()
+            if len(summary) > 240:
+                summary = summary[:237] + "..."
+            # light cleanup to keep mood short
+            if len(mood) > 40:
+                mood = mood[:37] + "..."
+            out[uid] = {"summary": enforce_no_diagnosis(summary), "mood": mood or "neutral tone"}
+        return out
+
+
 
 
 if __name__ == "__main__":
@@ -297,12 +434,23 @@ if __name__ == "__main__":
       print("device:", torch.cuda.get_device_name(0))
 
     bot = MentalHealthChatbot()
-    demo = [
-        "I’ve been anxious before presentations. Any tips?",
-        "Where can I find resources for coping with panic attacks?",
-        "I feel stuck and unmotivated lately.",
-    ]
-    for msg in demo:
-        res = bot.handle_message(ChatRequest(user_id="u1", message=msg, history=[]))
-        print("\nUSER:", msg)
-        print("BOT :", res.reply)
+
+    # 1) Dangerous message auto-response
+    danger_reply = bot.respond_to_flagged(
+        tag="self-harm",
+        message="I don't want to be here anymore.",
+        recent_messages=[
+            "hey are you okay?",
+            "we're here for you",
+            "I don't want to be here anymore."
+        ]
+    )
+    print(danger_reply)
+
+    # 2) Group summary
+    summ = bot.summarize_group({
+        "u1": "Feeling anxious about finals but trying breathing exercises.",
+        "u2": ["Had a bad day at work", "irritated and overwhelmed"],
+        "u3": "I'm okay, just tired."
+    })
+    print(summ)  # -> {"u1":{"summary": "...", "mood":"anxious"}, ...}
