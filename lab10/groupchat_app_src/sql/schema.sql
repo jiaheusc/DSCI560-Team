@@ -146,3 +146,15 @@ CREATE TABLE IF NOT EXISTS group_profiles (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX IF NOT EXISTS idx_active_created ON chat_groups (is_active, created_at);
+
+CREATE TABLE IF NOT EXISTS daily_user_summaries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    user_id INT NOT NULL,
+    summary_date DATE NOT NULL,
+    summary_text TEXT,
+    mood VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_dus_group FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
+    CONSTRAINT fk_dus_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

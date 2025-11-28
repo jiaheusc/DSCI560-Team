@@ -126,6 +126,22 @@ class Message(Base):
     group: Mapped["ChatGroups"] = relationship("ChatGroups", back_populates="messages")
 
 # ---------------------------------------------------------
+# USER DAILY SUMMARY TABLE
+# ---------------------------------------------------------
+class DailyUserSummary(Base):
+    __tablename__ = "daily_user_summaries"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("chat_groups.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    summary_date: Mapped["DateTime"] = mapped_column(DateTime(timezone=True))
+    summary_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    mood: Mapped[str] = mapped_column(String(50))
+    created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    group: Mapped["ChatGroups"] = relationship("ChatGroups")
+    user: Mapped["User"] = relationship("User")
+
+# ---------------------------------------------------------
 # OLD QUESTIONNAIRE (SYSTEM DEFAULT) — OPTIONAL
 # ---------------------------------------------------------
 

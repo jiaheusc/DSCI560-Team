@@ -9,8 +9,8 @@ from llm import chat_completion
 import time
 import asyncio
 from utils.security import encrypt, decrypt
-from model.red_flag_detector import check_both, batch_check_both
-from model.chatbot import MentalHealthChatbot
+from utils.task import get_chatbot
+from model.red_flag_detector import check_both
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, MessageResponse,
     ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, SupportChatRequest, 
@@ -36,7 +36,6 @@ class UserConnectionManager:
             await ws.send_json(message)
 
 manager = UserConnectionManager()
-chatbot = MentalHealthChatbot()
 
 async def broadcast_message(session: AsyncSession, msg: Message, group_id: int):
     username = None
@@ -70,7 +69,7 @@ async def maybe_answer_with_llm(sender_id: int, content: str, group_id: int):
         return
     
     from db import SessionLocal, Message
-
+    chatbot = get_chatbot()
     async with SessionLocal() as session:
         req = ChatRequest(
             user_id=str(sender_id),
@@ -412,6 +411,7 @@ async def post_group_message(
             except Exception:
                 pass
         
+        chatbot = get_chatbot()
         opening_line = await chatbot.respond_to_flagged(
             tag = flag_type,
             message = payload.content,

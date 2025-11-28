@@ -14,3 +14,4 @@ pymysql
 model2vec
 faiss-cpu
 accelerate
+apscheduler
