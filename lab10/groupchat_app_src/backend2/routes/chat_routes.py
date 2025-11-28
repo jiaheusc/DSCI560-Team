@@ -13,7 +13,7 @@ from model.red_flag_detector import check_both, batch_check_both
 from model.chatbot import MentalHealthChatbot
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, MessageResponse,
-    ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, 
+    ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, SupportChatRequest, 
     ChatGroupUpdate, ChatGroupResponse, MemberAdd, ChatRequest, UserPublicDetail
 )
 router = APIRouter(prefix="/api", tags=["Group Chat"])
@@ -412,22 +412,38 @@ async def post_group_message(
             except Exception:
                 pass
         
-        reply = await chatbot.respond_to_flagged(
+        opening_line = await chatbot.respond_to_flagged(
             tag = flag_type,
             message = payload.content,
             recent_messages = recent_msgs
         )
         return {
             "ok": False, 
-            "id": m.id, 
-            "detail": flag_type,
-            "intervention_text": reply
+            "id": m.id,
+            "ai_opening_line": opening_line,
+            "detail": flag_type
         }
     else:
         await broadcast_message(session, m, payload.group_id)
         asyncio.create_task(maybe_answer_with_llm(token_data.user_id, payload.content, payload.group_id))
         return {"ok": True, "id": m.id}
-    
+
+@router.post("/support-chat/start", response_model=dict)
+async def start_support_chat(
+    payload: SupportChatRequest,
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    ai_msg = Message(
+        user_id=None,
+        group_id=payload.group_id,
+        content=encrypt(payload.opening_message),
+        is_bot=True,
+        is_visible=True
+    )
+    session.add(ai_msg)
+    await session.commit()
+    return {"ok": True} 
     
 @router.websocket("/ws")
 async def websocket_endpoint(

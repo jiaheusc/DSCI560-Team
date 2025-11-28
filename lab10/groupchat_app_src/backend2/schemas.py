@@ -147,8 +147,12 @@ class MessagePayload(BaseModel):
 class MessageResponse(BaseModel):
     ok: bool
     id: int
-    intervention_text: Optional[str] = None
+    ai_opening_line: Optional[str] = None
     detail: Optional[str] = None
+
+class SupportChatRequest(BaseModel):
+    opening_message: str
+    group_id: int
 
 class GroupMessageResponse(BaseModel):
     id: int

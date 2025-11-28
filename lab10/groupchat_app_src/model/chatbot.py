@@ -333,7 +333,7 @@ class MentalHealthChatbot:
             f"{context_blob}\n"
             "Flagged message:\n"
             f"\"{message}\"\n\n"
-            "Compose one short response (3–6 sentences) following the goals above."
+            "Compose one short response (1-2 sentences) following the goals above."
         )
 
         reply = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt)
