@@ -48,6 +48,25 @@ async def signup_therapist(
     token = create_access_token({"username": u.username, "role": u.user_role.value, "user_id": u.id})
     return {"ok": True, "token": token}
 
+@router.post("/operator/signup")
+async def signup_operator(
+    payload: AuthPayload,
+    token_data: TokenData =Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    
+    exists = await session.execute(select(User).where(User.username == payload.username))
+    if exists.scalar_one_or_none():
+        raise HTTPException(400, "Username already taken")
+
+    u = User(username=payload.username, password_hash=get_password_hash(payload.password), user_role=UserRole.operator)
+    session.add(u)
+    await session.commit()
+    await session.refresh(u)
+
+    token = create_access_token({"username": u.username, "role": u.user_role.value, "user_id": u.id})
+    return {"ok": True, "token": token}
+
 @router.post("/login")
 async def login(
     payload: AuthPayload,
