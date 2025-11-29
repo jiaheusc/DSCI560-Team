@@ -135,7 +135,7 @@ class DailyUserSummary(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     summary_date: Mapped["DateTime"] = mapped_column(DateTime(timezone=True))
     summary_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    mood: Mapped[str] = mapped_column(String(50))
+    mood: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped["DateTime"] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     group: Mapped["ChatGroups"] = relationship("ChatGroups")

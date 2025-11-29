@@ -65,6 +65,8 @@ async def generate_daily_summaries():
                 for uid_key, info in summary_data.items():
                     try:
                         u_id = int(uid_key)
+                        print(info.get("summary", ""))
+                        print(info.get("mood", "neutral"))
                         summary_text = encrypt(info.get("summary", ""))
                         mood = encrypt(info.get("mood", "neutral"))
                         exists_stmt = select(DailyUserSummary).where(

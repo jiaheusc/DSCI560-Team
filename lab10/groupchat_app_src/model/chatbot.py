@@ -342,7 +342,7 @@ class MentalHealthChatbot:
         return reply.strip()
 
     # ========= NEW: per-user summary + mood =========
-    def summarize_group(self, messages_by_user: dict[str, any]) -> dict[str, dict[str, str]]:
+    async def summarize_group(self, messages_by_user: dict[str, any]) -> dict[str, dict[str, str]]:
         """
         Summarize each user's message(s) and infer a short free-text mood phrase.
         messages_by_user: { user_id: "msg" | [msgs...] }
