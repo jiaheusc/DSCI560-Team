@@ -343,87 +343,81 @@ class MentalHealthChatbot:
 
     # ========= NEW: per-user summary + mood =========
     async def summarize_group(self, messages_by_user: dict[str, any]) -> dict[str, dict[str, str]]:
+        
         """
-        Summarize each user's message(s) and infer a short free-text mood phrase.
+        Summarize each user's messages independently and return FULL summaries (no truncation).
         messages_by_user: { user_id: "msg" | [msgs...] }
         Returns: { user_id: { "summary": str, "mood": str } }
         """
-        # Normalize to compact text per user
-        normalized = {}
-        for uid, msg in (messages_by_user or {}).items():
-            if isinstance(msg, list):
-                text = " ".join(str(m) for m in msg if m)
-            else:
-                text = str(msg or "")
-            text = text.replace("\n", " ").strip()
-            if text:
-                normalized[uid] = text
-        if not normalized:
+
+        if not messages_by_user:
             return {}
 
-        # Bound prompt size
-        MAX_CHARS = 6000
-        items = list(normalized.items())
-        blob_parts, total = [], 0
-        for uid, txt in items:
-            part = f"{uid}: {txt}"
-            if total + len(part) > MAX_CHARS:
-                break
-            blob_parts.append(part); total += len(part)
-        roster_blob = "\n".join(blob_parts)
+        def _normalize_msgs(msgs) -> str:
+            if isinstance(msgs, list):
+                text = " ".join(str(m) for m in msgs if m)
+            else:
+                text = str(msgs or "")
+            return text.replace("\n", " ").strip()
 
-        # System prompt: free-text mood, keep concise
-        system = (
-            "You help a facilitator summarize a group chat without diagnosing. "
-            "For each user, provide: "
-            "1) a one-sentence summary (concise, neutral, no medical diagnosis), and "
-            "2) a SHORT mood/feeling/status phrase (2–5 words, free text, e.g., 'stressed and tired'). "
-            "Output STRICT JSON only:\n"
-            "{\"users\": {\"<user_id>\": {\"summary\": \"...\", \"mood\": \"...\"}, ...}}"
-        )
-        user_prompt = (
-            "Group messages:\n" + roster_blob +
-            "\n\nReturn ONLY the JSON object. No extra text."
-        )
+        results: dict[str, dict[str, str]] = {}
 
-        # Use lower temperature for more stable JSON
+        # lower temp for stable JSON per user
         orig_temp, orig_top_p, orig_rep = self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty
-        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = 0.2, 0.95, 1.0
-        raw = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt)
-        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = 0.2, 0.9, 1.0
 
-        # Parse JSON (robust)
-        import json, re
-        try:
-            parsed = json.loads(raw)
-        except Exception:
-            m = re.search(r"\{.*\}", raw, re.DOTALL)
-            parsed = json.loads(m.group(0)) if m else {"users": {}}
-
-        users = parsed.get("users") if isinstance(parsed, dict) else {}
-        if not isinstance(users, dict):
-            # Fallback if parsing failed
-            return {
-                uid: {
-                    "summary": (txt[:180] + "...") if len(txt) > 180 else txt,
-                    "mood": "neutral tone"
-                } for uid, txt in normalized.items()
-            }
-
-        # Post-process: trim lengths, enforce no-diagnosis safety
-        out = {}
-        for uid, obj in users.items():
-            if not isinstance(obj, dict): 
+        for uid, msgs in messages_by_user.items():
+            user_text = _normalize_msgs(msgs)
+            if not user_text:
+                results[uid] = {"summary": "", "mood": "neutral tone"}
                 continue
-            summary = str(obj.get("summary", "")).strip()
-            mood = str(obj.get("mood", "")).strip()
-            if len(summary) > 240:
-                summary = summary[:237] + "..."
-            # light cleanup to keep mood short
-            if len(mood) > 40:
-                mood = mood[:37] + "..."
-            out[uid] = {"summary": enforce_no_diagnosis(summary), "mood": mood or "neutral tone"}
-        return out
+
+            system = (
+                "You help a facilitator summarize a single participant's chat without diagnosing. "
+                "Provide: (1) a one-sentence summary (neutral, no medical diagnosis), and "
+                "(2) a SHORT mood/feeling/status phrase (free text, e.g., 'stressed and tired'). "
+                "Output STRICT JSON only for this user:\n"
+                "{\"summary\": \"...\", \"mood\": \"...\"}"
+            )
+            user_prompt = (
+                "Messages from this user:\n"
+                + user_text +
+                "\n\nReturn ONLY the JSON object for this user. No extra text."
+            )
+
+            raw = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt)
+
+            # Parse JSON robustly (no trimming of content)
+            import json, re
+            obj = {}
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                m = re.search(r"\{.*\}", raw, re.DOTALL)
+                if m:
+                    try:
+                        obj = json.loads(m.group(0))
+                    except Exception:
+                        obj = {}
+
+            # Use model output as-is (full), with diagnosis guard on the summary only
+            if isinstance(obj, dict):
+                summary = str(obj.get("summary", "")).strip()
+                mood = str(obj.get("mood", "")).strip()
+            else:
+                summary, mood = "", ""
+
+            if not summary:
+                # fallback: use the user's own text fully (no truncation)
+                summary = user_text
+
+            summary = enforce_no_diagnosis(summary)  # keep safety language
+            results[uid] = {"summary": summary, "mood": (mood or "neutral tone")}
+
+        # restore generation knobs
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
+        return results
+
 
 
 
