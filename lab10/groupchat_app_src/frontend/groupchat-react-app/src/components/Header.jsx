@@ -7,10 +7,13 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { fontSize, changeFontSize } = useFontSize();
-  const { logout } = useAuth();
+  const { role,logout } = useAuth();
 
   const path = location.pathname;
+  let homePath = "/";
 
+  if (role === "user") homePath = "/user";
+  else if (role === "therapist") homePath = "/therapist";
   // Case 1: inside a chat room (/chat/123)
   const isChatRoom = /^\/chat\/\d+/.test(path);
 
@@ -50,7 +53,7 @@ const Header = () => {
         )}
 
         {!isChatRoom && showBackHomeGeneral && (
-          <button onClick={() => navigate("/")} style={btn}>
+          <button onClick={() => navigate(homePath)} style={btn}>
             ← Home
           </button>
         )}
