@@ -129,7 +129,8 @@ async def create_group(
     
     group = ChatGroups(
         group_name=payload.group_name, 
-        current_size=initial_member_count, 
+        current_size=initial_member_count,
+        is_ai_1on1=False,
         is_active=True
     )
     session.add(group)

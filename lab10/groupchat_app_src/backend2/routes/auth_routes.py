@@ -51,7 +51,6 @@ async def signup_therapist(
 @router.post("/operator/signup")
 async def signup_operator(
     payload: AuthPayload,
-    token_data: TokenData =Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
     

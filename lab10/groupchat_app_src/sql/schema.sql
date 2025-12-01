@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS chat_groups (
     id INT AUTO_INCREMENT PRIMARY KEY,
     group_name VARCHAR(50),
+    is_ai_1on1 TINYINT(1) NOT NULL DEFAULT 0,
     current_size INT NOT NULL DEFAULT 0,
     max_size INT NOT NULL DEFAULT 10,
     is_active BOOLEAN DEFAULT FALSE,
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS messages (
   group_id INT NOT NULL,
   content TEXT NOT NULL,
   is_bot BOOLEAN DEFAULT FALSE,
+  is_visible TINYINT(1) NOT NULL DEFAULT 1
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_group FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE
@@ -153,7 +155,7 @@ CREATE TABLE IF NOT EXISTS daily_user_summaries (
     user_id INT NOT NULL,
     summary_date DATE NOT NULL,
     summary_text TEXT,
-    mood VARCHAR(50),
+    mood TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_dus_group FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
     CONSTRAINT fk_dus_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
