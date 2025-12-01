@@ -3,7 +3,7 @@ import { useAuth } from "../AuthContext";
 import TherapistPicker from "./TherapistPicker";
 
 const UserHome = () => {
-  const { token, logout } = useAuth();
+  const { token } = useAuth();
   const [needsTherapist, setNeedsTherapist] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
@@ -39,9 +39,14 @@ const UserHome = () => {
   };
 
   return (
-    <div className="auth">
+    <div className="auth"
+        style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",    
+        alignItems: "center" 
+      }}>
       <h2>User Home</h2>
-
       {/* Therapist picker popup */}
       {showPicker && (
         <TherapistPicker
@@ -54,8 +59,7 @@ const UserHome = () => {
         <p style={{ color: "red", marginBottom: 20 }}>
           You must select a therapist before entering the chat.
         </p>
-      ) : (
-        <p>Your questionnaire has been submitted.</p>
+      ) : (<p>Welcome!</p>
       )}
 
       {!needsTherapist && (
@@ -74,9 +78,6 @@ const UserHome = () => {
         </>
       )}
 
-      <button style={{ background: "#ccc", marginTop: 20 }} onClick={logout}>
-        Log out
-      </button>
     </div>
   );
 };

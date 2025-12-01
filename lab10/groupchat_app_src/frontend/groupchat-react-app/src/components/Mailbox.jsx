@@ -8,7 +8,6 @@ const Mailbox = () => {
   const [open, setOpen] = useState({});
   const [showSend, setShowSend] = useState(false);
   const [targetId, setTargetId] = useState("");
-  const navigate = useNavigate();
   const [recipient, setRecipient] = useState(null);
   const [msg, setMsg] = useState("");
   const [status, setStatus] = useState("");
@@ -157,18 +156,6 @@ const Mailbox = () => {
           marginBottom: 20
         }}
       >
-        {/* Back Home */}
-        <button
-          onClick={() => window.history.back()}
-          style={{
-            padding: "8px 14px",
-            borderRadius: 8,
-            border: "1px solid #ccc",
-            cursor: "pointer"
-          }}
-        >
-          ← Home
-        </button>
 
         {/* Title */}
         <h2 style={{ margin: 0 }}>Mailbox</h2>

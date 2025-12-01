@@ -4,7 +4,7 @@ import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 
 const TherapistHome = () => {
-  const { token, logout } = useAuth();
+  const { token} = useAuth();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
 
@@ -24,7 +24,13 @@ const TherapistHome = () => {
   const unreadCount = messages.filter((m) => !m.is_read).length;
 
   return (
-    <div className="auth">
+    <div className="auth"
+        style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",     
+        alignItems: "center" 
+      }}>
       <h2>Therapist Dashboard</h2>
 
       {/* Unread alert */}
@@ -71,10 +77,6 @@ const TherapistHome = () => {
       {/* AI Summary */}
       <button onClick={() => navigate("/ai-summary")}>
         AI Summary
-      </button>
-      {/* Logout */}
-      <button style={{ background: "#ccc" }} onClick={logout}>
-        Log out
       </button>
     </div>
   );

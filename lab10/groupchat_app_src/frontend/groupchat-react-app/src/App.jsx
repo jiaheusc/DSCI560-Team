@@ -2,15 +2,21 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
+import Header from "./components/Header";
+import { FontSizeProvider } from "./context/FontSizeContext";
+
 import Auth from "./components/Auth";
 import Questionnaire from "./components/Questionnaire";
 import UserHome from "./components/UserHome";
 import TherapistHome from "./components/TherapistHome";
 import Mailbox from "./components/Mailbox";
 import Chat from "./components/Chat";
-import ProfilePage from "./components/ProfilePage";   
+import ProfilePage from "./components/ProfilePage";
 import TherapistPublicProfile from "./pages/TherapistPublicProfile";
 import AiSummary from "./pages/AiSummary";
+import ChatRoom from "./pages/ChatRoom";
+
+
 const App = () => {
   const { token, role } = useAuth();
 
@@ -27,38 +33,42 @@ const App = () => {
 
   return (
     <BrowserRouter>
-      <div className="page-container">
-        <Routes>
+      <FontSizeProvider>
+        <Header />  {/* 全局 Header（会自动隐藏在 login 页） */}
 
-          <Route path="/" element={<Navigate to="/login" />} />
+        <div className="page-container">
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" />} />
 
-          <Route path="/login" element={<Auth />} />
+            <Route path="/login" element={<Auth />} />
 
-          <Route path="/questionnaire" element={requireRole(<Questionnaire />, "user")} />
+            <Route path="/questionnaire" element={requireRole(<Questionnaire />, "user")} />
 
-          {/* USER HOME */}
-          <Route path="/user" element={requireRole(<UserHome />, "user")} />
+            {/* USER HOME */}
+            <Route path="/user" element={requireRole(<UserHome />, "user")} />
 
-          {/* THERAPIST HOME */}
-          <Route path="/therapist" element={requireRole(<TherapistHome />, "therapist")} />
+            {/* THERAPIST HOME */}
+            <Route path="/therapist" element={requireRole(<TherapistHome />, "therapist")} />
 
-          {/*  Profile (user + therapist) */}
-          <Route path="/profile" element={requireAuth(<ProfilePage />)} />
+            {/* Profile */}
+            <Route path="/profile" element={requireAuth(<ProfilePage />)} />
 
-          {/* Public therapist view */}
-          <Route path="/therapist-profile/:id" element={<TherapistPublicProfile />} />
+            {/* Public therapist */}
+            <Route path="/therapist-profile/:id" element={<TherapistPublicProfile />} />
 
-          {/* Shared mailbox */}
-          <Route path="/mailbox" element={requireAuth(<Mailbox />)} />
+            {/* Mailbox */}
+            <Route path="/mailbox" element={requireAuth(<Mailbox />)} />
 
-          {/* Shared chat */}
-          <Route path="/chat" element={requireAuth(<Chat />)} />
-          {/* AI Summary (therapist) */}
-          <Route path="/ai-summary" element={<AiSummary />} />
+            {/* Chat */}
+            <Route path="/chat" element={requireAuth(<Chat />)} />
+            <Route path="/chat/:groupId" element={requireAuth(<ChatRoom />)} />
+            {/* AI Summary */}
+            <Route path="/ai-summary" element={<AiSummary />} />
 
-          <Route path="*" element={<Navigate to="/login" />} />
-        </Routes>
-      </div>
+            <Route path="*" element={<Navigate to="/login" />} />
+          </Routes>
+        </div>
+      </FontSizeProvider>
     </BrowserRouter>
   );
 };

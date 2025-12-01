@@ -40,7 +40,6 @@ const profileConfig = {
 
 const ProfilePage = () => {
   const { token,role } = useAuth();
-  const navigate = useNavigate();
 
   const cfg = profileConfig[role];
 
@@ -135,12 +134,6 @@ const ProfilePage = () => {
         marginBottom: 20,
         alignItems: "center"
       }}>
-        <button
-          onClick={() => navigate(cfg.home)}
-          style={{ padding: "8px 14px", border: "1px solid #ccc", borderRadius: 8 }}
-        >
-          ← Home
-        </button>
 
         <h2 style={{ margin: 0 }}>
           {role === "user" ? "User Profile" : "Therapist Profile"}

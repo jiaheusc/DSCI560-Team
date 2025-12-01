@@ -130,7 +130,13 @@ const Auth = () => {
   };
 
   return (
-    <div className="card auth">
+    <div className="card auth"
+      style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px"   
+    }}
+    >
       {showConsent && (
         <ConfidentialityModal
           onAgree={handleAgree}
