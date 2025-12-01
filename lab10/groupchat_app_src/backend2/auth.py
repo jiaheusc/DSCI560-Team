@@ -2,7 +2,11 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt, JWTError
-from passlib.context import CryptContext
+# 1. 移除 passlib 导入
+# from passlib.context import CryptContext 
+# 2. 新增 bcrypt 导入
+import bcrypt
+
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -10,7 +14,9 @@ from pydantic import BaseModel, ValidationError
 
 load_dotenv()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 3. 移除 pwd_context 定义
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 security = HTTPBearer()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change_me")
@@ -21,17 +27,37 @@ class TokenData(BaseModel):
     username: str
     role: str
     user_id: int
+
 def get_password_hash(password: str) -> str:
-    # bcrypt hard limit — must truncate
+    # bcrypt hard limit — must truncate (保留你原有的截断逻辑)
     if len(password.encode("utf-8")) > 72:
         password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.hash(password)
+    
+    # 4. 改用原生 bcrypt 生成哈希
+    # bcrypt 需要 bytes 类型
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    
+    # 存入数据库时转回 string
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
+    # 保留截断逻辑
     if len(plain_password.encode("utf-8")) > 72:
         plain_password = plain_password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.verify(plain_password, password_hash)
+    
+    # 5. 改用原生 bcrypt 验证
+    try:
+        pwd_bytes = plain_password.encode('utf-8')
+        # 数据库里的 hash 是 string，需要转成 bytes
+        hash_bytes = password_hash.encode('utf-8')
+        
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+    except (ValueError, TypeError):
+        # 如果哈希格式不对，直接返回 False
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):

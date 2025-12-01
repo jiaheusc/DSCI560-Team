@@ -15,6 +15,8 @@ const Chat = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [warningType, setWarningType] = useState("");
   const navigate = useNavigate();
+  const [aiOpeningLine, setAiOpeningLine] = useState("");
+
   // scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,8 +113,9 @@ const Chat = () => {
   if (data.ok === false) {
     console.warn("⚠ Danger detected:", data.detail);
     setWarningType(data.detail);
+    setAiOpeningLine(data.ai_opening_line || "");  
     setShowWarning(true);
-    return; 
+    return;
   }
 
   // normal OK
@@ -126,7 +129,7 @@ const Chat = () => {
     {/* Left Group List */}
     <div className="chat-sidebar">
       <button
-            onClick={() => navigate("/therapist")}
+            onClick={() => navigate("/user")}
             style={{
             padding: "8px 14px",
             borderRadius: 8,
@@ -249,57 +252,65 @@ const Chat = () => {
 
     {/* ⚠ Danger Warning Modal */}
     {showWarning && (
-  <div className="modal-overlay">
-    <div className="modal-box">
+      <div className="modal-overlay">
+        <div className="modal-box">
 
-      <h3>We detected something important</h3>
+          <h3>We detected something important</h3>
 
-      {warningType === "self_harm" && (
-        <p>
-          Your message indicates you may be going through a difficult moment.  
-          Would you like to talk privately with our AI assistant?
-        </p>
-      )}
+          {warningType === "self_harm" && (
+            <p>
+              Your message indicates you may be going through a difficult moment.  
+              Would you like to talk privately with our AI assistant?
+            </p>
+          )}
 
-      {warningType === "hate" && (
-        <p>
-          Your message contains harmful language.  
-          Would you prefer to continue privately with AI?
-        </p>
-      )}
+          {warningType === "hate" && (
+            <p>
+              Your message contains harmful language.  
+              Would you prefer to continue privately with AI?
+            </p>
+          )}
 
-      <div className="modal-buttons">
-        <button
-          className="modal-btn-primary"
-          onClick={() => {
-            setShowWarning(false);
+          <div className="modal-buttons">
+            <button
+              className="modal-btn-primary"
+              onClick={async () => {
+                setShowWarning(false);
 
-            // find AI 1-on-1 group
-            const aiGroup = groups.find(g => g.is_ai_1on1 === true);
+                // find AI 1-on-1 group
+                const aiGroup = groups.find(g => g.is_ai_1on1 === true);
 
-            if (!aiGroup) {
-              alert("AI chat not found. (should not happen)");
-              return;
-            }
+                if (!aiGroup) {
+                  alert("AI chat not found. (should not happen)");
+                  return;
+                }
+                await fetch("/api/support-chat/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                      group_id: aiGroup.id,
+                      opening_message: aiOpeningLine
+                    })
+                  });
 
-            // Enter AI group chat
-            handleSelectGroup(aiGroup.id);
-          }}
-        >
-          Talk to AI
-        </button>
+                // Enter AI group chat
+                handleSelectGroup(aiGroup.id);
+              }}
+            >
+              Talk to AI
+            </button>
 
-        <button
-          className="modal-btn-secondary"
-          onClick={() => setShowWarning(false)}
-        >
-          Cancel
-        </button>
+            <button
+              className="modal-btn-secondary"
+              onClick={() => setShowWarning(false)}
+            >
+              Cancel
+            </button>
+          </div>
+
+        </div>
       </div>
-
-    </div>
-  </div>
-)}
+    )}
 
   </div>
 );
