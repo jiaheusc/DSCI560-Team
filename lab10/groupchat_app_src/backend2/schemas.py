@@ -115,7 +115,16 @@ class PatientSummaryForTherapist(BaseModel):
 class PatientListResponse(BaseModel):
     users: List[PatientSummaryForTherapist]
 
+class DailySummaryResponse(BaseModel):
+    summary_date: datetime
+    summary_text: Optional[str] = None
+    mood: Optional[str] = None
 
+    class Config:
+        from_attributes = True
+
+class DailySummaryListResponse(BaseModel):
+    summaries: List[DailySummaryResponse]
 
 # user <-> therapist chat
 class ChatSendPayload(BaseModel):
