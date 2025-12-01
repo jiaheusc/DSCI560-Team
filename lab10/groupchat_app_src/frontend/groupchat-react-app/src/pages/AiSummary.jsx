@@ -7,7 +7,8 @@ const AiSummary = () => {
   const { token } = useAuth();
   const [patients, setPatients] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const navigate = useNavigate();
+  const [expandedIndex, setExpandedIndex] = useState(null);
+
   // Time range
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -195,28 +196,60 @@ const AiSummary = () => {
             whiteSpace: "pre-wrap"
           }}
         >
-          {summaries.map((s, idx) => (
-            <div
-              key={idx}
-              style={{
-                marginBottom: 20,
-                paddingBottom: 10,
-                borderBottom: "1px solid #ddd"
-              }}
-            >
-              <h4 style={{ marginBottom: 6 }}>
-                {new Date(s.summary_date).toLocaleDateString()}
-              </h4>
+          {summaries.map((s, idx) => {
+            const isExpanded = expandedIndex === idx;
+            const maxChars = 150; 
 
-              {s.mood && (
-                <p>
-                  <strong>Mood:</strong> {s.mood}
+            const shortText =
+              s.summary_text && s.summary_text.length > maxChars
+                ? s.summary_text.slice(0, maxChars) + "..."
+                : s.summary_text;
+
+            return (
+              <div
+                key={idx}
+                style={{
+                  marginBottom: 25,
+                  paddingBottom: 15,
+                  borderBottom: "1px solid #ddd"
+                }}
+              >
+                {/* Mood */}
+                <h4>Mood</h4>
+                <p>{s.mood || <i>No mood recorded</i>}</p>
+
+                {/* Summary */}
+                <h4 style={{ marginTop: 15 }}>Summary</h4>
+
+                <p style={{ whiteSpace: "pre-wrap" }}>
+                  {isExpanded ? s.summary_text : shortText}
                 </p>
-              )}
 
-              <p>{s.summary_text}</p>
-            </div>
-          ))}
+                {/* Toggle Button */}
+                {s.summary_text && s.summary_text.length > maxChars && (
+                  <button
+                    style={{
+                      marginTop: 6,
+                      padding: "4px 8px",
+                      border: "1px solid #ccc",
+                      borderRadius: 6,
+                      cursor: "pointer"
+                    }}
+                    onClick={() =>
+                      setExpandedIndex(isExpanded ? null : idx)
+                    }
+                  >
+                    {isExpanded ? "Show Less" : "Show More"}
+                  </button>
+                )}
+
+                {/* Date */}
+                <h4 style={{ marginTop: 15 }}>Date</h4>
+                <p>{new Date(s.summary_date).toLocaleDateString()}</p>
+              </div>
+            );
+          })}
+
         </div>
       )}
 

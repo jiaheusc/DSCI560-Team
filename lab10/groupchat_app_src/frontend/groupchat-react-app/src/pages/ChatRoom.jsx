@@ -1,8 +1,41 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
+const HARMFUL_KEYWORDS = [
+  // self-harm
+  "suicide",
+  "kill myself",
+  "self harm",
+  "end my life",
+  // violence
+  "bomb",
+  "shoot",
+  "stab",
+  "kill ",
+  // hate
+  "hate ",
+  "racist",
+  "anti-gay",
+  "anti black",
+  "anti asian",
+  // sexual
+  "sex",
+  "porn",
+  "xxx",
+  "nsfw",
+  "18+",
+  // harassment
+  "bully",
+  "idiot",
+  "stupid",
+  "loser"
+];
 
 const ChatRoom = () => {
+  const containsHarmfulLanguage = (text) => {
+  const t = text.toLowerCase();
+  return HARMFUL_KEYWORDS.some((word) => t.includes(word));
+};
   const { token, userId } = useAuth();
   const { groupId } = useParams();      
   const [messages, setMessages] = useState([]);
@@ -149,6 +182,10 @@ const ChatRoom = () => {
         <button
           style={smallBtn}
           onClick={async () => {
+            if (containsHarmfulLanguage(editingName)) {
+              alert("Group name contains harmful or unsafe language.");
+              return; 
+            }
             const res = await fetch(`/api/chat-groups/${groupId}`, {
               method: "POST",
               headers: {
