@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getMailbox, getTherapistUserProfile, getUserGroups,sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
-import { useNavigate } from "react-router-dom";
 const Mailbox = () => {
   const { token, role } = useAuth();
   const [items, setItems] = useState([]);
