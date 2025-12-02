@@ -328,8 +328,6 @@ const Mailbox = () => {
                     toggle(m.id, m.is_read);         // 更新 UI 状态
                   }}
                 >
-
-
                 {open[m.id] ? "▲ Hide Questionnaire & AI Recommendation" : "▼ View Questionnaire & AI Recommendation"}
               </button>
 
