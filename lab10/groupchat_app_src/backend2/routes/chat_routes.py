@@ -8,6 +8,7 @@ from websocket_manager import ConnectionManager
 from llm import chat_completion
 import time
 import asyncio
+from model.grouping import CentroidOps
 from utils.security import encrypt, decrypt
 from utils.task import get_chatbot
 from model.red_flag_detector import check_both
@@ -135,10 +136,13 @@ async def create_group(
     session.add(group)
     await session.flush()
 
-    members = [
-        ChatGroupUsers(group_id=group.id, user_id=u.id, is_active=True)
-        for u in users
-    ]
+    ops = CentroidOps(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+    members = []
+    for u in users:
+        member = ChatGroupUsers(group_id=group.id, user_id=u.id, is_active=True)
+        members.append(member)
+        ops.update_centroid_incremental(group_id=group.id, user_id=u.id)
+
     session.add_all(members)
     await session.commit()
     await session.refresh(group)
@@ -214,7 +218,8 @@ async def add_member(
     target_group.current_size += 1
     session.add(target_group)
     await session.commit()
-
+    ops = CentroidOps(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+    ops.update_centroid_incremental(group_id=group_id, user_id=new_member.id)
     return {"ok": True}
 
 # list user' groups
