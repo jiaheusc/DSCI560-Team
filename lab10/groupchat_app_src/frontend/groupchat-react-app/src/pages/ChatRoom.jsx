@@ -148,7 +148,7 @@ const ChatRoom = () => {
 
 
   return (
-    <div className="chatroom">
+    <div className="chatroom-container">
 
       {/* Header */}
 <div

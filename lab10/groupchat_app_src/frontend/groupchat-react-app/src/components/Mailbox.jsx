@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getMailbox, getUserGroups,getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
+import RejectModal from "../components/RejectModal";
 const Mailbox = () => {
   const { token, role } = useAuth();
   const [items, setItems] = useState([]);
@@ -11,6 +12,8 @@ const Mailbox = () => {
   const [msg, setMsg] = useState("");
   const [status, setStatus] = useState("");
   const [userGroups, setUserGroups] = useState({});
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectMailItem, setRejectMailItem] = useState(null);
   const loadUserPartner = async () => {
     if (role !== "user") return; 
     
@@ -432,7 +435,10 @@ const Mailbox = () => {
                         <button
                           className="mailbox-reject-btn"
                           disabled={alreadyInGroup}
-                          onClick={() => !alreadyInGroup && handleRejectCreateGroup(m)}
+                          onClick={() => {
+                            setRejectMailItem(m);
+                            setShowRejectModal(true);
+                          }}
                           style={{
                             opacity: alreadyInGroup ? 0.5 : 1,
                             cursor: alreadyInGroup ? "not-allowed" : "pointer",
@@ -521,7 +527,18 @@ const Mailbox = () => {
 
         </div>
       ))}
+      <RejectModal
+        visible={showRejectModal}
+        mailItem={rejectMailItem}
+        onClose={() => setShowRejectModal(false)}
+        token={token}
+        createAutoGroup={createAutoGroup}
+        addUserToGroup={addUserToGroup}
+        approveUser={approveUser}
+        reloadMailbox={load}
+      />
     </div>
+    
   );
 };
 
