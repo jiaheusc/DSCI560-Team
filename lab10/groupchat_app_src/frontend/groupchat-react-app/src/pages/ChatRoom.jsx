@@ -116,28 +116,36 @@ const ChatRoom = () => {
   };
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+  if (!input.trim()) return;
 
-    await fetch("/api/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        group_id: Number(groupId),
-        content: input
-      })
-    });
-    const data = await res.json();
-    if (data.ok === false) {
-      setWarningType(data.detail);         
-      setAiOpeningLine(data.ai_opening_line || "");
-      setShowWarning(true);
-      return;
-    }
-    setInput("");
-  };
+  // 1) 正确：保存 fetch 的结果到 res
+  const res = await fetch("/api/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      group_id: Number(groupId),
+      content: input
+    })
+  });
+
+  // 2) 解析 JSON
+  const data = await res.json();
+
+  // 3) 后端 danger detection
+  if (data.ok === false) {
+    setWarningType(data.detail);
+    setAiOpeningLine(data.ai_opening_line || "");
+    setShowWarning(true);
+    return;
+  }
+
+  // 4) 正常发送
+  setInput("");
+};
+
 
   return (
     <div className="chatroom">
