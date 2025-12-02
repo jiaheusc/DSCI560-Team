@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { getMailbox, getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
+import { getMailbox, getUserGroups,getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
-import { useNavigate } from "react-router-dom";
 const Mailbox = () => {
   const { token, role } = useAuth();
   const [items, setItems] = useState([]);
@@ -11,6 +10,7 @@ const Mailbox = () => {
   const [recipient, setRecipient] = useState(null);
   const [msg, setMsg] = useState("");
   const [status, setStatus] = useState("");
+  const [userGroups, setUserGroups] = useState({});
   const loadUserPartner = async () => {
     if (role !== "user") return; 
     
@@ -61,8 +61,26 @@ const Mailbox = () => {
   };
   const load = async () => {
     const data = await getMailbox(token);
-    setItems(data.messages);  
+    setItems(data.messages);
+
+    // 找到所有 questionnaire 的用户
+    const userIds = [
+      ...new Set(
+        data.messages
+          .filter(m => m.content.type === "questionnaire")
+          .map(m => m.from_user)
+      )
+    ];
+
+    const groupsMap = {};
+    for (const uid of userIds) {
+      const result = await getUserGroups(uid, token);
+      groupsMap[uid] = result.groups || [];
+    }
+
+    setUserGroups(groupsMap);
   };
+
 
   useEffect(() => {
     load();
@@ -126,6 +144,15 @@ const Mailbox = () => {
       console.error("Approve error:", err);
       alert("❌ Failed to approve user or assign group.");
     }
+  };
+
+  const handleRejectCreateGroup = async (mailItem) => {
+    const userId = mailItem.from_user;
+    const username = mailItem.from_name || `user_${userId}`;
+    let finalGroupId = null;
+    const gid = await createAutoGroup(username, token);
+    finalGroupId = gid;
+    alert("✔ Created new group", finalGroupId);
   };
 
 
@@ -297,8 +324,12 @@ const Mailbox = () => {
             <>
               <button
                 className="mailbox-accordion-btn"
-                onClick={() => toggle(m.id, m.is_read)}
-              >
+                onClick={async () => {
+                    toggle(m.id, m.is_read);         // 更新 UI 状态
+                  }}
+                >
+
+
                 {open[m.id] ? "▲ Hide Questionnaire & AI Recommendation" : "▼ View Questionnaire & AI Recommendation"}
               </button>
 
@@ -370,13 +401,58 @@ const Mailbox = () => {
 
 
               {role === "therapist" && (
-                <button
-                  className="mailbox-accept-btn"
-                  onClick={() => handleApprove(m)}
-                >
-                  ✅ Accept User
-                </button>
-              )}
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      marginTop: "10px",
+    }}
+  >
+    {(() => {
+      const groups = userGroups[m.from_user] || [];
+      const realGroups = groups.filter(g => !g.is_ai_1on1);
+      const alreadyInGroup = realGroups.length > 0;
+
+
+      return (
+        <>
+          <button
+            className="mailbox-accept-btn"
+            disabled={alreadyInGroup}
+            onClick={() => !alreadyInGroup && handleApprove(m)}
+            style={{
+              opacity: alreadyInGroup ? 0.5 : 1,
+              cursor: alreadyInGroup ? "not-allowed" : "pointer",
+            }}
+          >
+            Accept User
+          </button>
+
+          <button
+            className="mailbox-reject-btn"
+            disabled={alreadyInGroup}
+            onClick={() => !alreadyInGroup && handleRejectCreateGroup(m)}
+            style={{
+              opacity: alreadyInGroup ? 0.5 : 1,
+              cursor: alreadyInGroup ? "not-allowed" : "pointer",
+            }}
+          >
+            Reject, Create Group
+          </button>
+
+          {alreadyInGroup && (
+            <span style={{ color: "#888", fontSize: 13 }}>
+              User already in group
+            </span>
+          )}
+        </>
+      );
+    })()}
+  </div>
+)}
+
+
             </>
           )}
           
