@@ -183,7 +183,7 @@ class GroupMembersListResponse(BaseModel):
 
 class ChatGroupCreate(BaseModel):
     group_name: Optional[str] = "new group"
-    user_ids: List[int]
+    usernames: List[str]
 
 class ChatGroupResponse(BaseModel):
     id: int
