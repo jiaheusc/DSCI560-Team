@@ -302,3 +302,138 @@ class GroupWriter:
             self._update_centroid_incremental(sess, gid, e)
 
             return {"ok": True, "group_id": gid}
+        
+
+        
+# --- Centroid maintenance for backend: incremental + full rebuild ---
+from typing import Optional, List, Tuple
+import numpy as np
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+# If you already have these helpers, remove duplicates:
+def _l2(v: np.ndarray) -> np.ndarray:
+    v = v.astype(np.float32, copy=False)
+    n = np.linalg.norm(v)
+    return v if n == 0 else v / n
+
+def _from_blob(b: bytes, dim: int) -> np.ndarray:
+    return np.frombuffer(b, dtype=np.float32, count=dim)
+
+def _to_blob(v: np.ndarray) -> bytes:
+    return v.astype(np.float32, copy=False).tobytes()
+
+# Configure your DB URL here or pass it at init
+DEFAULT_DB_URL = "mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat"
+
+class CentroidOps:
+    """
+    Backend-friendly centroid updater.
+    Tables expected:
+      - chat_group_users(group_id, user_id, is_active)
+      - user_questionnaire_embeddings(user_id, model, dim, vec[BLOB float32])
+      - group_profiles(group_id PK, model, dim, centroid[BLOB float32], n_members, avg_sim)
+    """
+    def __init__(self, db_url: Optional[str] = None, embed_model: str = "BAAI/bge-small-en-v1.5"):
+        self.db_url = db_url or DEFAULT_DB_URL
+        self.engine = create_engine(self.db_url, pool_pre_ping=True)
+        self.Session = sessionmaker(bind=self.engine)
+        self.embed_model = embed_model
+
+    # ---------- public APIs ----------
+
+    def update_centroid_incremental(self, group_id: int, user_id: int) -> None:
+        """
+        O(1) centroid update after adding ONE approved user to group.
+        Assumes the user is already recorded in chat_group_users (is_active=TRUE)
+        and has an embedding in user_questionnaire_embeddings.
+        """
+        with self.Session.begin() as sess:
+            # fetch new member embedding
+            u = sess.execute(text("""
+                SELECT dim, vec FROM user_questionnaire_embeddings
+                WHERE user_id=:u
+            """), {"u": user_id}).fetchone()
+            if not u:
+                raise RuntimeError(f"No cached embedding for user {user_id}")
+
+            e = _l2(_from_blob(u.vec, int(u.dim)))
+
+            row = sess.execute(text("""
+                SELECT dim, centroid, n_members, avg_sim, model
+                FROM group_profiles WHERE group_id=:g
+            """), {"g": group_id}).fetchone()
+
+            if not row or row.centroid is None:
+                # initialize profile with this member
+                sess.execute(text("""
+                    INSERT INTO group_profiles (group_id, model, dim, centroid, n_members, avg_sim)
+                    VALUES (:g, :m, :d, :c, 1, 1.0)
+                    ON DUPLICATE KEY UPDATE model=:m, dim=:d, centroid=:c, n_members=1, avg_sim=1.0
+                """), {"g": group_id, "m": self.embed_model, "d": int(u.dim), "c": _to_blob(e)})
+                return
+
+            # incremental mean in cosine space (keep L2-normalized)
+            dim = int(row.dim)
+            c_old = _from_blob(row.centroid, dim)
+            n_old = int(row.n_members or 0)
+            c_new_raw = (c_old * max(n_old, 1) + e) / (max(n_old, 1) + 1)
+            c_new = _l2(c_new_raw)
+
+            # update running avg similarity (use similarity to new centroid)
+            sim_new = float(np.dot(c_new, e))
+            avg_old = float(row.avg_sim or 0.0)
+            avg_new = ((avg_old * n_old) + sim_new) / (n_old + 1)
+
+            sess.execute(text("""
+                UPDATE group_profiles
+                SET centroid=:c, n_members=:n, dim=:d, model=:m, avg_sim=:a
+                WHERE group_id=:g
+            """), {"c": _to_blob(c_new), "n": n_old + 1, "d": dim, "m": self.embed_model, "a": avg_new, "g": group_id})
+
+    def rebuild_centroid_full(self, group_id: int) -> dict:
+        """
+        Recompute centroid and stats from ALL active members in the group.
+        Use this if you did bulk changes (moves/removals) or want a clean recenter.
+        Returns {n_members, avg_sim} for logging/telemetry.
+        """
+        with self.Session.begin() as sess:
+            # collect active members' embeddings
+            rows = sess.execute(text("""
+                SELECT uqe.dim, uqe.vec
+                FROM chat_group_users cgu
+                JOIN user_questionnaire_embeddings uqe ON uqe.user_id = cgu.user_id
+                WHERE cgu.group_id=:g AND cgu.is_active=TRUE
+            """), {"g": group_id}).fetchall()
+
+            if not rows:
+                # No active members → clear profile
+                sess.execute(text("""
+                    INSERT INTO group_profiles (group_id, model, dim, centroid, n_members, avg_sim)
+                    VALUES (:g, :m, 0, NULL, 0, 0.0)
+                    ON DUPLICATE KEY UPDATE model=:m, dim=VALUES(dim), centroid=NULL, n_members=0, avg_sim=0.0
+                """), {"g": group_id, "m": self.embed_model})
+                return {"n_members": 0, "avg_sim": 0.0}
+
+            # normalize each vector, then mean and renormalize
+            dim = int(rows[0].dim)
+            vecs = []
+            for r in rows:
+                if int(r.dim) != dim:
+                    raise RuntimeError(f"Mixed embedding dimensions in group {group_id}")
+                vecs.append(_l2(_from_blob(r.vec, dim)))
+            mat = np.vstack(vecs)
+            centroid = _l2(mat.mean(axis=0))
+
+            # compute avg cosine to centroid
+            sims = (mat @ centroid).astype(float)
+            avg_sim = float(sims.mean())
+
+            sess.execute(text("""
+                INSERT INTO group_profiles (group_id, model, dim, centroid, n_members, avg_sim)
+                VALUES (:g, :m, :d, :c, :n, :a)
+                ON DUPLICATE KEY UPDATE model=:m, dim=:d, centroid=:c, n_members=:n, avg_sim=:a
+            """), {"g": group_id, "m": self.embed_model, "d": dim, "c": _to_blob(centroid),
+                   "n": len(rows), "a": avg_sim})
+
+            return {"n_members": len(rows), "avg_sim": avg_sim}
