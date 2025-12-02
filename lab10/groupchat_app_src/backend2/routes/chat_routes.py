@@ -1,5 +1,5 @@
 from typing import Dict
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from db import Message, ChatGroups, ChatGroupUsers, User, UserRole, UserProfile, get_db
@@ -17,6 +17,23 @@ from schemas import (
     ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, SupportChatRequest, 
     ChatGroupUpdate, ChatGroupResponse, MemberAdd, ChatRequest, UserPublicDetail
 )
+
+# help functions
+def update_group_centroids_safely(group_id: int, user_ids: list[int]):
+    try:
+        ops = CentroidOps(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
+        
+        for uid in user_ids:
+            try:
+                ops.update_centroid_incremental(group_id=group_id, user_id=uid)
+            except RuntimeError as e:
+                print(f"[Warning] User {uid} has no embedding, skipping centroid update. Error: {e}")
+            except Exception as e:
+                print(f"[Error] Failed to update centroid for user {uid}: {e}")
+                
+    except Exception as e:
+        print(f"[Critical] CentroidOps initialization failed: {e}")
+
 router = APIRouter(prefix="/api", tags=["Group Chat"])
 
 class UserConnectionManager:
@@ -106,6 +123,7 @@ MAX_SIZE = 10
 @router.post("/chat-groups")
 async def create_group(
     payload: ChatGroupCreate,
+    background_tasks: BackgroundTasks,
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
@@ -115,7 +133,8 @@ async def create_group(
     if not payload.usernames:
         raise HTTPException(400, "Group members list cannot be empty.")
 
-    stmt = select(User).where(User.username.in_(payload.usernames))
+    target_usernames = list(set(payload.usernames))
+    stmt = select(User).where(User.username.in_(target_usernames))
     users = (await session.execute(stmt)).scalars().all()
 
     if len(users) != len(payload.usernames):
@@ -136,16 +155,17 @@ async def create_group(
     session.add(group)
     await session.flush()
 
-    ops = CentroidOps(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
-    members = []
-    for u in users:
-        member = ChatGroupUsers(group_id=group.id, user_id=u.id, is_active=True)
-        members.append(member)
-        ops.update_centroid_incremental(group_id=group.id, user_id=u.id)
+    members = [
+        ChatGroupUsers(group_id=group.id, user_id=u.id, is_active=True)
+        for u in users
+    ]
 
     session.add_all(members)
     await session.commit()
     await session.refresh(group)
+
+    user_ids = [u.id for u in users]
+    background_tasks.add_task(update_group_centroids_safely, group.id, user_ids)
 
     return group.id
 
@@ -181,6 +201,7 @@ async def create_ai_group(
 async def add_member(
     group_id: int,
     payload: MemberAdd,
+    background_tasks: BackgroundTasks,
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
@@ -218,8 +239,7 @@ async def add_member(
     target_group.current_size += 1
     session.add(target_group)
     await session.commit()
-    ops = CentroidOps(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
-    ops.update_centroid_incremental(group_id=group_id, user_id=new_member.id)
+    background_tasks.add_task(update_group_centroids_safely, group_id, [new_member.id])
     return {"ok": True}
 
 # list user' groups
