@@ -44,6 +44,10 @@ const ChatRoom = () => {
   const [groupName, setGroupName] = useState("");
   const bottomRef = useRef(null);
   const wsRef = useRef(null);
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningType, setWarningType] = useState("");
+  const [aiOpeningLine, setAiOpeningLine] = useState("");
+
   const [editingName, setEditingName] = useState("");
   const [editing, setEditing] = useState(false);
   const smallBtn = {
@@ -71,6 +75,7 @@ const ChatRoom = () => {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
+    
     setMessages(data.messages || []);
   };
 
@@ -124,7 +129,13 @@ const ChatRoom = () => {
         content: input
       })
     });
-
+    const data = await res.json();
+    if (data.ok === false) {
+      setWarningType(data.detail);         
+      setAiOpeningLine(data.ai_opening_line || "");
+      setShowWarning(true);
+      return;
+    }
     setInput("");
   };
 
@@ -257,6 +268,75 @@ const ChatRoom = () => {
         />
         <button onClick={sendMessage}>Send</button>
       </div>
+          {showWarning && (
+  <div className="modal-overlay">
+    <div className="modal-box">
+
+      <h3>We detected something important</h3>
+
+      {warningType === "self_harm" && (
+        <p>
+          Your message indicates distress.  
+          Would you like to speak privately with our AI assistant?
+        </p>
+      )}
+
+      {warningType === "hate" && (
+        <p>
+          This message may require a private conversation.  
+          Switch to a private AI chat?
+        </p>
+      )}
+
+      <div className="modal-buttons">
+        <button
+          className="modal-btn-primary"
+          onClick={async () => {
+            setShowWarning(false);
+
+            // Find AI group
+            const groupsRes = await fetch("/api/chat-groups", {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const groupsData = await groupsRes.json();
+            const aiGroup = groupsData.groups.find(g => g.is_ai_1on1 === true);
+
+            if (!aiGroup) {
+              alert("AI chat not found.");
+              return;
+            }
+
+            // Start AI support chat
+            await fetch("/api/support-chat/start", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                group_id: aiGroup.id,
+                opening_message: aiOpeningLine,
+              }),
+            });
+
+            // redirect to chatroom of AI group
+            window.location.href = `/chat/${aiGroup.id}`;
+          }}
+        >
+          Talk to AI
+        </button>
+
+        <button
+          className="modal-btn-secondary"
+          onClick={() => setShowWarning(false)}
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
 
     </div>
   );
