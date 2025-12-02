@@ -8,7 +8,7 @@ const RejectModal = ({
   createAutoGroup,
   addUserToGroup,
   approveUser,
-  reloadMailbox
+  reloadMailbox,
 }) => {
   const [selectedGroupOption, setSelectedGroupOption] = useState(null);
 
@@ -25,11 +25,9 @@ const RejectModal = ({
       let finalGroupId = null;
 
       if (selectedGroupOption === "new") {
-        // create new group
         const gid = await createAutoGroup(username, token);
         finalGroupId = gid;
       } else {
-        // choose existing group
         finalGroupId = Number(selectedGroupOption);
         await addUserToGroup(finalGroupId, username, token);
       }
@@ -47,13 +45,37 @@ const RejectModal = ({
   };
 
   return (
-    <div className="mailbox-modal-overlay">
-      <div className="mailbox-modal-box">
-        <h3>Reject & Assign Group</h3>
+    <div
+      className="mailbox-modal-overlay"
+      style={{
+        position: "fixed",     // ⭐ 必须：让 modal 覆盖整个屏幕
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0, 0, 0, 0.45)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 9999,          // ⭐ 必须：压在所有内容上面
+      }}
+    >
+      <div
+        className="mailbox-modal-box"
+        style={{
+          background: "#fff",
+          padding: "24px",
+          borderRadius: "10px",
+          width: "420px",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          boxShadow: "0 6px 18px rgba(0, 0, 0, 0.25)",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Reject & Assign Group</h3>
 
         <p>Select a group for this user, or create a new one.</p>
 
-        {/* Top candidates */}
         <div style={{ marginBottom: 12 }}>
           <strong>Top Candidates:</strong>
         </div>
@@ -66,34 +88,60 @@ const RejectModal = ({
           )}
 
           {tops.map(([gid, sim]) => (
-            <label key={gid} style={{ cursor: "pointer" }}>
-              <input
-                type="radio"
-                name="reject-group"
-                value={gid}
-                checked={selectedGroupOption === gid}
-                onChange={() => setSelectedGroupOption(gid)}
-                style={{ marginRight: 6 }}
-              />
-              Group {gid} (sim: {sim})
-            </label>
+            <div
+              key={gid}
+              onClick={() => setSelectedGroupOption(gid)}
+              style={{
+                padding: "12px",
+                borderRadius: "10px",
+                border:
+                  selectedGroupOption === gid
+                    ? "2px solid #3A7AFE"
+                    : "1px solid #ddd",
+                background:
+                  selectedGroupOption === gid ? "#eef4ff" : "#fff",
+                cursor: "pointer",
+                boxShadow:
+                  selectedGroupOption === gid
+                    ? "0 0 8px rgba(58,122,254,0.3)"
+                    : "0 1px 4px rgba(0,0,0,0.08)",
+                transition: "0.2s",
+              }}
+            >
+              <div style={{ fontWeight: "bold", fontSize: 16 }}>
+                Group {gid}
+              </div>
+              <div style={{ fontSize: 14 }}>
+                <strong>Similarity:</strong> {sim}
+              </div>
+            </div>
           ))}
 
-          {/* new group */}
-          <label style={{ cursor: "pointer", marginTop: 6 }}>
-            <input
-              type="radio"
-              name="reject-group"
-              value="new"
-              checked={selectedGroupOption === "new"}
-              onChange={() => setSelectedGroupOption("new")}
-              style={{ marginRight: 6 }}
-            />
+          {/* Create new group */}
+          <div
+            onClick={() => setSelectedGroupOption("new")}
+            style={{
+              padding: "12px",
+              borderRadius: "10px",
+              border:
+                selectedGroupOption === "new"
+                  ? "2px solid #3A7AFE"
+                  : "1px solid #ddd",
+              background:
+                selectedGroupOption === "new" ? "#eef4ff" : "#fff",
+              cursor: "pointer",
+              textAlign: "center",
+              fontWeight: "bold",
+              boxShadow:
+                selectedGroupOption === "new"
+                  ? "0 0 8px rgba(58,122,254,0.3)"
+                  : "0 1px 4px rgba(0,0,0,0.08)",
+            }}
+          >
             ➕ Create New Group
-          </label>
+          </div>
         </div>
 
-        {/* Buttons */}
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button
             className="modal-btn-primary"
