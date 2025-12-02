@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getMailbox, getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
+import { getMailbox, getTherapistUserProfile, getUserGroups,sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 const Mailbox = () => {
@@ -11,6 +11,7 @@ const Mailbox = () => {
   const [recipient, setRecipient] = useState(null);
   const [msg, setMsg] = useState("");
   const [status, setStatus] = useState("");
+  const [userGroups, setUserGroups] = useState({});
   const loadUserPartner = async () => {
     if (role !== "user") return; 
     
@@ -61,8 +62,31 @@ const Mailbox = () => {
   };
   const load = async () => {
     const data = await getMailbox(token);
-    setItems(data.messages);  
+    setItems(data.messages);
+
+    // 从 messages 提取需要 check 的用户 ID（questionnaire）
+    const usersToCheck = data.messages
+      .filter(m => m.content.type === "questionnaire")
+      .map(m => m.from_user);
+
+    // 去重
+    const uniqueUsers = [...new Set(usersToCheck)];
+
+    // 批量请求每个用户的 group 信息
+    const results = {};
+    for (const uid of uniqueUsers) {
+      try {
+        const g = await getUserGroups(uid, token);
+        results[uid] = g.groups || [];
+      } catch {
+        results[uid] = [];
+      }
+    }
+
+    // 保存
+    setUserGroups(results);
   };
+
 
   useEffect(() => {
     load();
@@ -128,46 +152,13 @@ const Mailbox = () => {
     }
   };
 
-  const handleRejectCreateGroup = async (mail) => {
-    // The mailbox item contains: mail.from_user = user_id
-    const userId = mail.from_user;
-
-    // Ask therapist for group name
-    const groupName = prompt("Enter a name for the new group:");
-    if (!groupName || groupName.trim() === "") {
-      alert("Group name cannot be empty.");
-      return;
-    }
-
-    // Build payload exactly as backend expects
-    const payload = {
-      group_name: groupName,
-      user_ids: [userId]     
-    };
-
-    try {
-      const res = await fetch("/api/chat-groups", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        alert("Failed to create new group: " + err.detail);
-        return;
-      }
-
-      const groupId = await res.json();
-      alert(`New group created successfully! `);
-
-    } catch (err) {
-      console.error("Create group error:", err);
-      alert("Error creating group.");
-    }
+  const handleRejectCreateGroup = async (mailItem) => {
+    const userId = mailItem.from_user;
+    const username = mailItem.from_name || `user_${userId}`;
+    let finalGroupId = null;
+    const gid = await createAutoGroup(username, token);
+    finalGroupId = gid;
+    alert("✔ Created new group", gid);
   };
 
 
@@ -339,8 +330,23 @@ const Mailbox = () => {
             <>
               <button
                 className="mailbox-accordion-btn"
-                onClick={() => toggle(m.id, m.is_read)}
-              >
+                onClick={async () => {
+                    const isOpening = !open[m.id];   // ← 判断“将要变成打开”
+                    
+                    toggle(m.id, m.is_read);         // 更新 UI 状态
+
+                    // 如果是从关闭 → 打开，才加载组群信息
+                    if (isOpening) {
+                      const data = await getUserGroups(m.from_user, token);
+                      setUserGroups(prev => ({
+                        ...prev,
+                        [m.from_user]: data.groups || []
+                      }));
+                    }
+                  }}
+                >
+
+
                 {open[m.id] ? "▲ Hide Questionnaire & AI Recommendation" : "▼ View Questionnaire & AI Recommendation"}
               </button>
 
@@ -412,28 +418,56 @@ const Mailbox = () => {
 
 
               {role === "therapist" && (
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",      
-                  marginTop: "10px"
-                }}>
-                  <button
-                    className="mailbox-accept-btn"
-                    onClick={() => handleApprove(m)}
-                  >
-                    Accept User
-                  </button>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      marginTop: "10px",
+    }}
+  >
+    {(() => {
+      const groups = userGroups[m.from_user] || [];
+      const alreadyInGroup = groups.length > 0;
 
-                  <button
-                    className="mailbox-reject-btn"
-                    onClick={() => handleRejectCreateGroup(m)}
-                  >
-                    Reject, Create Group
-                  </button>
-                </div>
+      return (
+        <>
+          <button
+            className="mailbox-accept-btn"
+            disabled={alreadyInGroup}
+            onClick={() => !alreadyInGroup && handleApprove(m)}
+            style={{
+              opacity: alreadyInGroup ? 0.5 : 1,
+              cursor: alreadyInGroup ? "not-allowed" : "pointer",
+            }}
+          >
+            Accept User
+          </button>
 
-              )}
+          <button
+            className="mailbox-reject-btn"
+            disabled={alreadyInGroup}
+            onClick={() => !alreadyInGroup && handleRejectCreateGroup(m)}
+            style={{
+              opacity: alreadyInGroup ? 0.5 : 1,
+              cursor: alreadyInGroup ? "not-allowed" : "pointer",
+            }}
+          >
+            Reject, Create Group
+          </button>
+
+          {alreadyInGroup && (
+            <span style={{ color: "#888", fontSize: 13 }}>
+              User already in group
+            </span>
+          )}
+        </>
+      );
+    })()}
+  </div>
+)}
+
+
             </>
           )}
           

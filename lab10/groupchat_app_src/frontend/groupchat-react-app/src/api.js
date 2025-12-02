@@ -71,6 +71,12 @@ export const getMessages = (groupId, token) =>
 export const sendMessageToGroup = (content, groupId, token) =>
   api("/messages", "POST", { content, group_id: groupId }, token);
 
+export async function getUserGroups(userId, token) {
+  const res = await fetch(`/api/therapist/users/${userId}/groups`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
 //
 // =====================
 // Therapist Profile (private)
