@@ -128,6 +128,48 @@ const Mailbox = () => {
     }
   };
 
+  const handleRejectCreateGroup = async (mail) => {
+    // The mailbox item contains: mail.from_user = user_id
+    const userId = mail.from_user;
+
+    // Ask therapist for group name
+    const groupName = prompt("Enter a name for the new group:");
+    if (!groupName || groupName.trim() === "") {
+      alert("Group name cannot be empty.");
+      return;
+    }
+
+    // Build payload exactly as backend expects
+    const payload = {
+      group_name: groupName,
+      user_ids: [userId]     
+    };
+
+    try {
+      const res = await fetch("/api/chat-groups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Failed to create new group: " + err.detail);
+        return;
+      }
+
+      const groupId = await res.json();
+      alert(`New group created successfully! `);
+
+    } catch (err) {
+      console.error("Create group error:", err);
+      alert("Error creating group.");
+    }
+  };
+
 
   const labels = {
     age: "Age Range",
@@ -370,12 +412,27 @@ const Mailbox = () => {
 
 
               {role === "therapist" && (
-                <button
-                  className="mailbox-accept-btn"
-                  onClick={() => handleApprove(m)}
-                >
-                  ✅ Accept User
-                </button>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",      
+                  marginTop: "10px"
+                }}>
+                  <button
+                    className="mailbox-accept-btn"
+                    onClick={() => handleApprove(m)}
+                  >
+                    Accept User
+                  </button>
+
+                  <button
+                    className="mailbox-reject-btn"
+                    onClick={() => handleRejectCreateGroup(m)}
+                  >
+                    Reject, Create Group
+                  </button>
+                </div>
+
               )}
             </>
           )}

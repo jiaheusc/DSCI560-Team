@@ -196,9 +196,15 @@ const AiSummary = () => {
             whiteSpace: "pre-wrap"
           }}
         >
-          {summaries.map((s, idx) => {
+          
+          {summaries.length === 0 ? (
+          <p style={{ marginTop: 20, color: "#666" }}>
+            No summary found for this date range.
+          </p>
+        ) : (
+          summaries.map((s, idx) => {
             const isExpanded = expandedIndex === idx;
-            const maxChars = 150; 
+            const maxChars = 150;
 
             const shortText =
               s.summary_text && s.summary_text.length > maxChars
@@ -211,7 +217,7 @@ const AiSummary = () => {
                 style={{
                   marginBottom: 25,
                   paddingBottom: 15,
-                  borderBottom: "1px solid #ddd"
+                  borderBottom: "1px solid #ddd",
                 }}
               >
                 {/* Mood */}
@@ -220,7 +226,6 @@ const AiSummary = () => {
 
                 {/* Summary */}
                 <h4 style={{ marginTop: 15 }}>Summary</h4>
-
                 <p style={{ whiteSpace: "pre-wrap" }}>
                   {isExpanded ? s.summary_text : shortText}
                 </p>
@@ -233,11 +238,9 @@ const AiSummary = () => {
                       padding: "4px 8px",
                       border: "1px solid #ccc",
                       borderRadius: 6,
-                      cursor: "pointer"
+                      cursor: "pointer",
                     }}
-                    onClick={() =>
-                      setExpandedIndex(isExpanded ? null : idx)
-                    }
+                    onClick={() => setExpandedIndex(isExpanded ? null : idx)}
                   >
                     {isExpanded ? "Show Less" : "Show More"}
                   </button>
@@ -248,7 +251,9 @@ const AiSummary = () => {
                 <p>{new Date(s.summary_date).toLocaleDateString()}</p>
               </div>
             );
-          })}
+          })
+        )}
+
 
         </div>
       )}
