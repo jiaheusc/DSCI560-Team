@@ -111,16 +111,18 @@ async def create_group(
     if token_data.role != UserRole.therapist:
         raise HTTPException(403, "Only therapist can create group")
 
-    if not payload.usernames:
-        raise HTTPException(400, "Group members list cannot be empty.")
+    if not payload.user_ids:
+        raise HTTPException(status_code=400, detail="Group members list cannot be empty.")
+    
+    target_user_ids = list(set(payload.user_ids))
 
-    stmt = select(User).where(User.username.in_(payload.usernames))
+    stmt = select(User).where(User.id.in_(target_user_ids))
     users = (await session.execute(stmt)).scalars().all()
 
-    if len(users) != len(payload.usernames):
-        found = {u.username for u in users}
-        missing = [n for n in payload.usernames if n not in found]
-        raise HTTPException(404, f"Users not found: {missing}")
+    if len(users) != len(target_user_ids):
+        found_ids = {u.id for u in users}
+        missing = [uid for uid in target_user_ids if uid not in found_ids]
+        raise HTTPException(status_code=404, detail=f"Users not found with IDs: {missing}")
 
     initial_member_count = len(users)
 
@@ -137,14 +139,18 @@ async def create_group(
     await session.flush()
 
     members = [
-        ChatGroupUsers(group_id=group.id, user_id=u.id, is_active=True)
+        ChatGroupUsers(
+            group_id=group.id, 
+            user_id=u.id, 
+            is_active=True
+        )
         for u in users
     ]
     session.add_all(members)
     await session.commit()
     await session.refresh(group)
 
-    return group.id
+    return {"group_id": group.id}
 
 
 @router.post("/chat-groups/ai-1on1")
