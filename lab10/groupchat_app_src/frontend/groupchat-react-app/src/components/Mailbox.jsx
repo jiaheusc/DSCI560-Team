@@ -329,20 +329,9 @@ const Mailbox = () => {
           {m.content.type === "questionnaire" && (
             <>
               <button
-                className="mailbox-accordion-btn"
-                onClick={async () => {
-                    const isOpening = !open[m.id];   // ← 判断“将要变成打开”
-                    
-                    toggle(m.id, m.is_read);         // 更新 UI 状态
-
-                    // 如果是从关闭 → 打开，才加载组群信息
-                    if (isOpening) {
-                      const data = await getUserGroups(m.from_user, token);
-                      setUserGroups(prev => ({
-                        ...prev,
-                        [m.from_user]: data.groups || []
-                      }));
-                    }
+                  className="mailbox-accordion-btn"
+                  onClick={() => {
+                    toggle(m.id, m.is_read);
                   }}
                 >
 
@@ -428,7 +417,7 @@ const Mailbox = () => {
   >
     {(() => {
       const groups = userGroups[m.from_user] || [];
-      const alreadyInGroup = groups.length > 0;
+      const alreadyInGroup = groups.length < 0;
 
       return (
         <>
