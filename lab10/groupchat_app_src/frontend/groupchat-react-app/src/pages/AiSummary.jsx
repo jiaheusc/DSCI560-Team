@@ -186,77 +186,75 @@ const AiSummary = () => {
       )}
 
       {/* Display summary */}
-      {summaries.length > 0 && (
+      {/* Summary Cards */}
+{summaries.length === 0 && (
+  <p style={{ marginTop: 20, color: "#666" }}>
+    No summary found for this date range.
+  </p>
+)}
+
+{summaries.length > 0 && (
+  <div style={{ marginTop: 20 }}>
+    {summaries.map((s, idx) => {
+      const isOpen = expandedIndex === idx;
+
+      return (
         <div
+          key={idx}
+          onClick={() => setExpandedIndex(isOpen ? null : idx)}
           style={{
-            marginTop: 30,
-            padding: 15,
-            borderRadius: 8,
-            background: "#f5f5f5",
-            whiteSpace: "pre-wrap"
+            marginBottom: 15,
+            padding: "15px 18px",
+            border: "1px solid #ddd",
+            borderRadius: 10,
+            cursor: "pointer",
+            background: "#fafafa",
+            transition: "all 0.2s",
+            boxShadow: isOpen
+              ? "0 2px 8px rgba(0,0,0,0.15)"
+              : "0 1px 3px rgba(0,0,0,0.1)"
           }}
         >
-          
-          {summaries.length === 0 ? (
-          <p style={{ marginTop: 20, color: "#666" }}>
-            No summary found for this date range.
-          </p>
-        ) : (
-          summaries.map((s, idx) => {
-            const isExpanded = expandedIndex === idx;
-            const maxChars = 150;
+          {/* Title row */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}
+          >
+            <strong style={{ fontSize: 16 }}>
+              {new Date(s.summary_date).toLocaleDateString()}
+            </strong>
 
-            const shortText =
-              s.summary_text && s.summary_text.length > maxChars
-                ? s.summary_text.slice(0, maxChars) + "..."
-                : s.summary_text;
+            {/* Simple mood icon */}
+            <span style={{ fontSize: 18 }}>
+              {s.mood === "happy" && "😊"}
+              {s.mood === "sad" && "😢"}
+              {s.mood === "angry" && "😡"}
+              {s.mood === "neutral" && "😐"}
+              {!s.mood && "📝"}
+            </span>
+          </div>
 
-            return (
-              <div
-                key={idx}
-                style={{
-                  marginBottom: 25,
-                  paddingBottom: 15,
-                  borderBottom: "1px solid #ddd",
-                }}
-              >
-                {/* Mood */}
-                <h4>Mood</h4>
-                <p>{s.mood || <i>No mood recorded</i>}</p>
+          {/* Collapsible content */}
+          {isOpen && (
+            <div style={{ marginTop: 12 }}>
+              <h4 style={{ marginBottom: 5 }}>Mood</h4>
+              <p>{s.mood || <i>No mood recorded</i>}</p>
 
-                {/* Summary */}
-                <h4 style={{ marginTop: 15 }}>Summary</h4>
-                <p style={{ whiteSpace: "pre-wrap" }}>
-                  {isExpanded ? s.summary_text : shortText}
-                </p>
-
-                {/* Toggle Button */}
-                {s.summary_text && s.summary_text.length > maxChars && (
-                  <button
-                    style={{
-                      marginTop: 6,
-                      padding: "4px 8px",
-                      border: "1px solid #ccc",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setExpandedIndex(isExpanded ? null : idx)}
-                  >
-                    {isExpanded ? "Show Less" : "Show More"}
-                  </button>
-                )}
-
-                {/* Date */}
-                <h4 style={{ marginTop: 15 }}>Date</h4>
-                <p>{new Date(s.summary_date).toLocaleDateString()}</p>
-              </div>
-            );
-          })
-        )}
-
-
+              <h4 style={{ marginTop: 10, marginBottom: 5 }}>Summary</h4>
+              <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                {s.summary_text}
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      );
+    })}
+  </div>
+)}
+
 
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getMailbox, getTherapistUserProfile, getUserGroups,sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
+import { getMailbox, getUserGroups,getTherapistUserProfile, sendMail,addUserToGroup,createAutoGroup,approveUser, markMailRead,getMailPartner } from "../api";
 import { useAuth } from "../AuthContext";
 const Mailbox = () => {
   const { token, role } = useAuth();
@@ -63,27 +63,22 @@ const Mailbox = () => {
     const data = await getMailbox(token);
     setItems(data.messages);
 
-    // 从 messages 提取需要 check 的用户 ID（questionnaire）
-    const usersToCheck = data.messages
-      .filter(m => m.content.type === "questionnaire")
-      .map(m => m.from_user);
+    // 找到所有 questionnaire 的用户
+    const userIds = [
+      ...new Set(
+        data.messages
+          .filter(m => m.content.type === "questionnaire")
+          .map(m => m.from_user)
+      )
+    ];
 
-    // 去重
-    const uniqueUsers = [...new Set(usersToCheck)];
-
-    // 批量请求每个用户的 group 信息
-    const results = {};
-    for (const uid of uniqueUsers) {
-      try {
-        const g = await getUserGroups(uid, token);
-        results[uid] = g.groups || [];
-      } catch {
-        results[uid] = [];
-      }
+    const groupsMap = {};
+    for (const uid of userIds) {
+      const result = await getUserGroups(uid, token);
+      groupsMap[uid] = result.groups || [];
     }
 
-    // 保存
-    setUserGroups(results);
+    setUserGroups(groupsMap);
   };
 
 
@@ -157,7 +152,7 @@ const Mailbox = () => {
     let finalGroupId = null;
     const gid = await createAutoGroup(username, token);
     finalGroupId = gid;
-    alert("✔ Created new group", gid);
+    alert("✔ Created new group", finalGroupId);
   };
 
 
@@ -328,9 +323,9 @@ const Mailbox = () => {
           {m.content.type === "questionnaire" && (
             <>
               <button
-                  className="mailbox-accordion-btn"
-                  onClick={() => {
-                    toggle(m.id, m.is_read);
+                className="mailbox-accordion-btn"
+                onClick={async () => {
+                    toggle(m.id, m.is_read);      
                   }}
                 >
 
@@ -406,54 +401,56 @@ const Mailbox = () => {
 
 
               {role === "therapist" && (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      marginTop: "10px",
-    }}
-  >
-    {(() => {
-      const groups = userGroups[m.from_user] || [];
-      const alreadyInGroup = groups.length < 0;
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    marginTop: "10px",
+                  }}
+                >
+                  {(() => {
+                    const groups = userGroups[m.from_user] || [];
+                    const realGroups = groups.filter(g => !g.is_ai_1on1);
+                    const alreadyInGroup = realGroups.length > 0;
 
-      return (
-        <>
-          <button
-            className="mailbox-accept-btn"
-            disabled={alreadyInGroup}
-            onClick={() => !alreadyInGroup && handleApprove(m)}
-            style={{
-              opacity: alreadyInGroup ? 0.5 : 1,
-              cursor: alreadyInGroup ? "not-allowed" : "pointer",
-            }}
-          >
-            Accept User
-          </button>
 
-          <button
-            className="mailbox-reject-btn"
-            disabled={alreadyInGroup}
-            onClick={() => !alreadyInGroup && handleRejectCreateGroup(m)}
-            style={{
-              opacity: alreadyInGroup ? 0.5 : 1,
-              cursor: alreadyInGroup ? "not-allowed" : "pointer",
-            }}
-          >
-            Reject, Create Group
-          </button>
+                    return (
+                      <>
+                        <button
+                          className="mailbox-accept-btn"
+                          disabled={alreadyInGroup}
+                          onClick={() => !alreadyInGroup && handleApprove(m)}
+                          style={{
+                            opacity: alreadyInGroup ? 0.5 : 1,
+                            cursor: alreadyInGroup ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          Accept User
+                        </button>
 
-          {alreadyInGroup && (
-            <span style={{ color: "#888", fontSize: 13 }}>
-              User already in group
-            </span>
-          )}
-        </>
-      );
-    })()}
-  </div>
-)}
+                        <button
+                          className="mailbox-reject-btn"
+                          disabled={alreadyInGroup}
+                          onClick={() => !alreadyInGroup && handleRejectCreateGroup(m)}
+                          style={{
+                            opacity: alreadyInGroup ? 0.5 : 1,
+                            cursor: alreadyInGroup ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          Reject, Create Group
+                        </button>
+
+                        {alreadyInGroup && (
+                          <span style={{ color: "#888", fontSize: 13 }}>
+                            User already in group
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
 
             </>
