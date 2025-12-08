@@ -3,9 +3,8 @@ import React, { createContext, useState, useContext, useEffect } from "react";
 const FontSizeContext = createContext();
 
 export const FontSizeProvider = ({ children }) => {
-  const [fontSize, setFontSize] = useState("medium"); // default
+  const [fontSize, setFontSize] = useState("medium"); // small / medium / large
 
-  // load saved preference
   useEffect(() => {
     const saved = localStorage.getItem("fontSize");
     if (saved) setFontSize(saved);
@@ -16,19 +15,32 @@ export const FontSizeProvider = ({ children }) => {
     localStorage.setItem("fontSize", size);
   };
 
+  const scale = sizeToScale(fontSize);
+
+  console.log("Current fontSize from context:", fontSize, "scale:", scale);
+
   return (
     <FontSizeContext.Provider value={{ fontSize, changeFontSize }}>
-      <div style={{ fontSize: sizeToPx(fontSize) }}>{children}</div>
+      {/* 这里用 em，当 html/body 是 16px 时：
+          small = 0.9em ≈ 14.4px
+          medium = 1em = 16px
+          large = 1.1em ≈ 17.6px */}
+      <div style={{ fontSize: `${scale}em` }} className="font-root">
+        {children}
+      </div>
     </FontSizeContext.Provider>
   );
 };
 
 export const useFontSize = () => useContext(FontSizeContext);
 
-const sizeToPx = (size) => {
+const sizeToScale = (size) => {
   switch (size) {
-    case "small": return "20px";
-    case "large": return "24px";
-    default: return "22px";
+    case "small":
+      return 0.8;   // 稍微小一点
+    case "large":
+      return 1.4;   // 稍微大一点
+    default:
+      return 1;     // medium
   }
 };

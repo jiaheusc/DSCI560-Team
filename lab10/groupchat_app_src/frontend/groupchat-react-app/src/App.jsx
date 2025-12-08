@@ -1,8 +1,8 @@
+// src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
-import Header from "./components/Header";
 import { FontSizeProvider } from "./context/FontSizeContext";
 
 import Auth from "./components/Auth";
@@ -16,6 +16,7 @@ import TherapistPublicProfile from "./pages/TherapistPublicProfile";
 import AiSummary from "./pages/AiSummary";
 import ChatRoom from "./pages/ChatRoom";
 
+import AppLayout from "./AppLayout";
 
 const App = () => {
   const { token, role } = useAuth();
@@ -34,40 +35,44 @@ const App = () => {
   return (
     <BrowserRouter>
       <FontSizeProvider>
-        <Header />  {/* 全局 Header（会自动隐藏在 login 页） */}
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" />} />
 
-        <div className="page-container">
-          <Routes>
-            <Route path="/" element={<Navigate to="/login" />} />
+          {/* 登录页：不套布局 */}
+          <Route path="/login" element={<Auth />} />
 
-            <Route path="/login" element={<Auth />} />
+          {/* 公共 therapist profile，如果你想也可以挪进 Layout 里 */}
+          <Route
+            path="/therapist-profile/:id"
+            element={<TherapistPublicProfile />}
+          />
 
-            <Route path="/questionnaire" element={requireRole(<Questionnaire />, "user")} />
-
-            {/* USER HOME */}
-            <Route path="/user" element={requireRole(<UserHome />, "user")} />
-
-            {/* THERAPIST HOME */}
-            <Route path="/therapist" element={requireRole(<TherapistHome />, "therapist")} />
-
-            {/* Profile */}
+          {/* 下面所有路由都套在 AppLayout（Header + Sider）里 */}
+          <Route element={<AppLayout />}>
+            <Route
+              path="/questionnaire"
+              element={requireRole(<Questionnaire />, "user")}
+            />
+            <Route
+              path="/user"
+              element={requireRole(<UserHome />, "user")}
+            />
+            <Route
+              path="/therapist"
+              element={requireRole(<TherapistHome />, "therapist")}
+            />
             <Route path="/profile" element={requireAuth(<ProfilePage />)} />
-
-            {/* Public therapist */}
-            <Route path="/therapist-profile/:id" element={<TherapistPublicProfile />} />
-
-            {/* Mailbox */}
             <Route path="/mailbox" element={requireAuth(<Mailbox />)} />
-
-            {/* Chat */}
             <Route path="/chat" element={requireAuth(<Chat />)} />
-            <Route path="/chat/:groupId" element={requireAuth(<ChatRoom />)} />
-            {/* AI Summary */}
+            <Route
+              path="/chat/:groupId"
+              element={requireAuth(<ChatRoom />)}
+            />
             <Route path="/ai-summary" element={<AiSummary />} />
+          </Route>
 
-            <Route path="*" element={<Navigate to="/login" />} />
-          </Routes>
-        </div>
+          <Route path="*" element={<Navigate to="/login" />} />
+        </Routes>
       </FontSizeProvider>
     </BrowserRouter>
   );

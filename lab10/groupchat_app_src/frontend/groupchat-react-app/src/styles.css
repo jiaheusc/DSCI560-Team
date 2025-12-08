@@ -4,6 +4,17 @@
 * {
   box-sizing: border-box;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  font-size: inherit;  
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+html {
+  font-size: 16px;  /* 1em = 16px，当 scale=1 时 */
 }
 
 body {
@@ -13,12 +24,110 @@ body {
 }
 
 /* ================================
+   APP HEADER BAR
+================================ */
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 64px; /* 对齐 antd 默认 header 高度 */
+}
+
+.header-title {
+  font-size: 1.125em;  /* 原 18px */
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 右侧区域：字号切换 + 用户菜单 */
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 字号切换按钮 */
+.header-fontsize-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.fs-btn {
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 2px 8px;
+  font-size: 0.75em;  /* 原 12px */
+  cursor: pointer;
+  color: #475569;
+}
+
+.fs-btn.active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+/* 用户下拉按钮 */
+.header-user-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.875em;  /* 原 14px */
+  color: #0f172a;
+}
+
+.header-user-btn:hover {
+  background: #f8fafc;
+}
+
+.header-user-name {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 手机端 header 缩紧一点 */
+@media (max-width: 768px) {
+  .app-header-inner {
+    padding: 0 8px;
+  }
+
+  .header-title {
+    font-size: 1em;  /* 原 16px */
+  }
+
+  .header-user-name {
+    max-width: 80px;
+  }
+}
+
+/* ================================
    PAGE LAYOUT
 ================================ */
 .page-container {
   max-width: 900px;
   margin: 0 auto;
   padding: 24px;
+}
+
+/* 手机端缩小 padding */
+@media (max-width: 768px) {
+  .page-container {
+    max-width: 100%;
+    padding: 12px;
+  }
 }
 
 /* ================================
@@ -31,11 +140,18 @@ body {
   padding: 28px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
   animation: fadeIn 0.3s ease;
-  text-align: left; /* 强制全部左对齐 */
+  text-align: left;
 }
 
 .card:hover {
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 18px;
+    border-radius: 12px;
+  }
 }
 
 /* ================================
@@ -50,7 +166,7 @@ select {
   border: 1px solid #cbd5e1;
   background: #f8fafc;
   color: #334155;
-  font-size: 15px;
+  font-size: 0.9375em; /* 原 15px */
 }
 
 input:focus,
@@ -77,6 +193,7 @@ button {
   cursor: pointer;
   font-weight: 500;
   transition: background 0.25s;
+  font-size: inherit;   /* ⭐ 跟随外层字号 */
 }
 
 button:hover {
@@ -103,12 +220,12 @@ button:hover {
 
 .question-block .question {
   margin-bottom: 10px;
-  font-size: 16px;
+  font-size: 1em;   /* 原 16px */
   font-weight: 600;
   color: #334155;
 }
 
-/* --- Fix ALL Left Alignment (Root Cause!) --- */
+/* label 左对齐 */
 .question-block label {
   display: flex;
   flex-direction: row;
@@ -118,7 +235,7 @@ button:hover {
   padding: 6px 4px;
   gap: 10px;
   cursor: pointer;
-  text-align: left; /* label 内容绝对左对齐 */
+  text-align: left;
 }
 
 .question-block label:hover {
@@ -136,12 +253,12 @@ button:hover {
 /* error text */
 .error-message {
   color: #dc2626;
-  font-size: 14px;
+  font-size: 0.875em; /* 原 14px */
   margin-top: 6px;
 }
 
 /* ================================
-   CHAT MESSAGE LIST
+   SIMPLE CHAT MESSAGE LIST (old)
 ================================ */
 .messages {
   height: 60vh;
@@ -166,7 +283,7 @@ button:hover {
 }
 
 /* ================================
-   GROUP LIST
+   GROUP LIST (generic)
 ================================ */
 .group-list button {
   background: #f1f5f9;
@@ -179,37 +296,9 @@ button:hover {
   width: 100%;
 }
 
-.group-list button:hover {
-  background: #e0f2f1;
-}
-
-.group-list .selected {
-  background: #86b5c1;
-  color: white;
-}
-
 /* ================================
-   MODAL (Agreement)
+   MAILBOX
 ================================ */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-}
-
-.modal-box {
-  width: 480px;
-  background: #fff;
-  padding: 24px;
-  border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-  animation: fadeIn 0.3s ease;
-}
-/* Mailbox container */
 .mailbox-container {
   max-width: 720px;
   margin: 40px auto;
@@ -217,20 +306,17 @@ button:hover {
   font-family: Inter, sans-serif;
 }
 
-/* Header */
 .mailbox-header {
-  font-size: 28px;
+  font-size: 1.75em; /* 原 28px */
   font-weight: 600;
   margin-bottom: 20px;
 }
 
-/* Empty message */
 .mailbox-empty {
-  font-size: 16px;
+  font-size: 1em; /* 原 16px */
   opacity: 0.6;
 }
 
-/* Card */
 .mailbox-card {
   background: #fff;
   border-radius: 12px;
@@ -240,32 +326,28 @@ button:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* Row */
 .mailbox-row {
   margin-bottom: 6px;
-  font-size: 15px;
+  font-size: 0.9375em; /* 原 15px */
 }
 
-/* Text message */
 .mailbox-text {
   margin-top: 12px;
   padding: 12px;
   background: #f7f7f7;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875em; /* 原 14px */
 }
 
-/* Accordion button */
 .mailbox-accordion-btn {
   margin-top: 15px;
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid #ccc;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875em; /* 原 14px */
 }
 
-/* Questionnaire Box */
 .mailbox-qa-box {
   margin-top: 15px;
   background: #fafafa;
@@ -274,32 +356,39 @@ button:hover {
   border: 1px solid #ddd;
 }
 
-/* Questionnaire Row */
 .mailbox-qa-row {
   margin-bottom: 10px;
   line-height: 1.4;
 }
 
-/* Label */
 .mailbox-qa-label {
   font-weight: 600;
 }
 
-/* Value */
 .mailbox-qa-value {
   margin-left: 6px;
 }
 
 .mailbox-unread-dot {
   color: #ff3b30;
-  font-size: 14px;
+  font-size: 0.875em; /* 原 14px */
   margin-right: 8px;
   font-weight: bold;
 }
+
+@media (max-width: 768px) {
+  .mailbox-container {
+    margin: 20px auto;
+    padding: 0 12px;
+  }
+}
+
+/* ================================
+   MODAL
+================================ */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
   background: rgba(0,0,0,0.4);
@@ -309,11 +398,22 @@ button:hover {
   z-index: 2000;
 }
 
+.modal-box {
+  width: 480px;
+  max-width: 90vw;
+  background: #fff;
+  padding: 24px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  animation: fadeIn 0.3s ease;
+}
+
 .modal-window {
   background: white;
   padding: 20px;
   border-radius: 10px;
   width: 380px;
+  max-width: 90vw;
   max-height: 80vh;
   overflow-y: auto;
 }
@@ -327,20 +427,16 @@ button:hover {
 }
 
 /* ================================
-   Fade Animation
+   CHAT LAYOUT (for /chat 页面)
 ================================ */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 顶层左右布局 */
+/* 顶层左右布局（PC） */
 .chat-container {
   display: flex;
-  height: 100vh;
+  height: 100%;
+  min-height: 0; /* 让内部 flex 子元素可以滚动 */
 }
 
-/* 左侧 */
+/* 左侧 Sidebar */
 .chat-sidebar {
   width: 240px;
   padding: 15px;
@@ -360,6 +456,7 @@ button:hover {
   cursor: pointer;
   transition: .2s;
   text-align: left;
+  color: #555;
 }
 
 .group-btn:hover {
@@ -369,15 +466,16 @@ button:hover {
 .group-btn.active {
   background: #d8f5d1;
   border-color: #9bdc95;
+  color: #000;
 }
 
 .group-name {
-  font-size: 16px;
+  font-size: 1em; /* 原 16px */
   font-weight: bold;
 }
 
 .group-count {
-  font-size: 12px;
+  font-size: 0.75em; /* 原 12px */
   color: #777;
 }
 
@@ -386,87 +484,10 @@ button:hover {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-/* 消息列表 */
-.chat-msg-list {
-  flex: 1;
-  padding: 15px;
-  overflow-y: auto;
-}
-
-/* 气泡布局 */
-.msg-row {
-  display: flex;
-  margin: 10px 0;
-}
-
-.msg-row.me {
-  justify-content: flex-end;
-}
-
-.msg-body {
-  max-width: 70%;
-}
-
-.msg-username {
-  font-size: 13px;
-  color: #666;
-  margin-bottom: 4px;
-}
-
-.msg-bubble {
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: white;
-  border: 1px solid #ddd;
-  line-height: 1.4;
-}
-
-.msg-row.me .msg-bubble {
-  background: #9fe8a8;
-  border: none;
-}
-.group-btn {
-  color: #555;  
-}
-
-.group-btn.active {
-  color: #000;   
-}
-/* 时间 */
-.msg-time {
-  font-size: 11px;
-  color: #888;
-  margin-top: 4px;
-  text-align: right;
-}
-
-/* 输入框 */
-.chat-input-bar {
-  display: flex;
-  padding: 12px;
-  border-top: 1px solid #ddd;
-  background: white;
-}
-
-.chat-input-bar input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-}
-
-.chat-input-bar button {
-  margin-left: 10px;
-  padding: 10px 16px;
-  background: #4caf50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
+/* Header */
 .chat-header {
   display: flex;
   justify-content: space-between;
@@ -484,18 +505,19 @@ button:hover {
 
 .group-name-input {
   padding: 4px 6px;
-  font-size: 15px;
+  font-size: 0.9375em; /* 原 15px */
 }
 
 .group-name-save-btn {
   padding: 4px 8px;
-  font-size: 14px;
+  font-size: 0.875em; /* 原 14px */
   background: #4caf50;
   color: white;
   border: none;
   border-radius: 4px;
 }
 
+/* 成员头像 */
 .member-avatar-list {
   display: flex;
   align-items: center;
@@ -509,20 +531,7 @@ button:hover {
   border: 2px solid #ddd;
 }
 
-.chatroom-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;               /* 占满整个窗口 */
-  overflow: hidden;
-}
-
-/* Header 固定高度 */
-.chatroom-header {
-  padding: 10px 0;
-  flex-shrink: 0;
-}
-
-/* 聊天消息列表，自动填充剩余空间 + 可滚动 */
+/* 消息列表（通用，用于 chat-main 内部） */
 .chat-msg-list {
   flex: 1;
   overflow-y: auto;
@@ -530,15 +539,54 @@ button:hover {
   background: #f8f8f8;
 }
 
-/* 底部输入栏固定 */
+/* 气泡布局 */
+.msg-row {
+  display: flex;
+  margin: 10px 0;
+}
+
+.msg-row.me {
+  justify-content: flex-end;
+}
+
+.msg-body {
+  max-width: 70%;
+}
+
+.msg-username {
+  font-size: 0.8125em; /* 原 13px */
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.msg-bubble {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: white;
+  border: 1px solid #ddd;
+  line-height: 1.4;
+}
+
+.msg-row.me .msg-bubble {
+  background: #9fe8a8;
+  border: none;
+}
+
+.msg-time {
+  font-size: 0.6875em; /* 原 11px */
+  color: #888;
+  margin-top: 4px;
+  text-align: right;
+}
+
+/* 底部输入栏 */
 .chat-input-bar {
   display: flex;
   gap: 10px;
   padding: 10px;
   background: #ffffff;
   border-top: 1px solid #ddd;
-
-  flex-shrink: 0;               /* 不被压缩 */
+  flex-shrink: 0;
 }
 
 .chat-input-bar input {
@@ -555,4 +603,65 @@ button:hover {
   border: none;
   color: white;
   cursor: pointer;
+  font-size: inherit;
+}
+
+/* ChatRoom 单页容器（/chat/:groupId） */
+.chatroom-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ================================
+   CHAT - MOBILE RESPONSIVE
+================================ */
+@media (max-width: 768px) {
+  /* 左右变上下 */
+  .chat-container {
+    flex-direction: column;
+  }
+
+  .chat-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #ddd;
+    padding: 10px;
+    max-height: 180px;
+  }
+
+  .chat-main {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-msg-list {
+    padding: 8px;
+  }
+
+  .chat-input-bar {
+    padding: 8px;
+  }
+
+  .group-btn {
+    padding: 10px 12px;
+  }
+
+  .chat-input-bar button {
+    padding: 8px 14px;
+    font-size: 0.875em; /* 原 14px */
+  }
+}
+
+/* ================================
+   Fade Animation
+================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ant-layout,
+.ant-layout * {
+  font-size: inherit;
 }

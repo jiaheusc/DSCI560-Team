@@ -1,118 +1,121 @@
+// src/components/Header.jsx
 import React from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useFontSize } from "../context/FontSizeContext";
+import { Dropdown } from "antd";
+import {
+  DownOutlined,
+  LogoutOutlined,
+  UserOutlined,
+  HomeOutlined
+} from "@ant-design/icons";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
+import { useFontSize } from "../context/FontSizeContext";
 
-const Header = () => {
-  const navigate = useNavigate();
+const routeTitleMap = [
+  { path: "/therapist", title: "Home" },
+  { path: "/user", title: "Home" },
+  { path: "/chat", title: "Chat" },
+  { path: "/mailbox", title: "Mailbox" },
+  { path: "/ai-summary", title: "AI Summary" },
+  { path: "/profile", title: "Profile" },
+  { path: "/questionnaire", title: "Questionnaire" }
+];
+
+const HeaderBar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { role, username, logout } = useAuth();
   const { fontSize, changeFontSize } = useFontSize();
-  const { role,logout } = useAuth();
 
-  const path = location.pathname;
-  let homePath = "/";
+  // 当前标题：找路由前缀
+  const currentTitle =
+    routeTitleMap.find((r) => location.pathname.startsWith(r.path))?.title ||
+    "Home";
 
-  if (role === "user") homePath = "/user";
-  else if (role === "therapist") homePath = "/therapist";
-  // Case 1: inside a chat room (/chat/123)
-  const isChatRoom = /^\/chat\/\d+/.test(path);
+  // 根据角色决定“Home”跳去哪
+  const homePath = role === "therapist" ? "/therapist" : "/user";
+  const homeLabel = role === "therapist" ? "Therapist Dashboard" : "User Home";
 
-  // Case 2: show generic Home button
-  const showBackHomeGeneral = [
-    "/chat",
-    "/mailbox",
-    "/profile",
-    "/ai-summary",
-  ].some((p) => path === p);
+  // 用户菜单
+  const items = [
+    {
+      key: "home",
+      label: homeLabel,
+      icon: <HomeOutlined />
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: <UserOutlined />
+    },
+    {
+      type: "divider"
+    },
+    {
+      key: "logout",
+      label: "Logout",
+      icon: <LogoutOutlined />,
+      danger: true
+    }
+  ];
 
-  // Case 3: show Logout
-  const showLogout = ["/user", "/therapist"].some((p) =>
-    path.startsWith(p)
-  );
+  const onMenuClick = ({ key }) => {
+    if (key === "home") {
+      navigate(homePath);
+    }
+    if (key === "profile") {
+      navigate("/profile");
+    }
+    if (key === "logout") {
+      if (logout) logout();
+      navigate("/login");
+    }
+  };
 
   return (
-    <header
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "10px 20px",
-        background: "#f7f7f7",
-        borderBottom: "1px solid #ddd",
-        position: "sticky",
-        top: 0,
-        zIndex: 1000,
-      }}
-    >
-      {/* Left side button */}
-      <div>
-        {isChatRoom && (
-          <button onClick={() => navigate("/chat")} style={btn}>
-            ← Back to Groups
-          </button>
-        )}
+    <div className="app-header-inner">
+      {/* 左：当前页面标题（Therapist / User 的首页都显示 Home） */}
+      <div className="header-title">{currentTitle}</div>
 
-        {!isChatRoom && showBackHomeGeneral && (
-          <button onClick={() => navigate(homePath)} style={btn}>
-            ← Home
-          </button>
-        )}
-      </div>
-
-      {/* Font Size */}
-      <div>
-        <button
-          style={fontSizeBtn(fontSize === "small")}
-          onClick={() => changeFontSize("small")}
-        >
-          A-
-        </button>
-        <button
-          style={fontSizeBtn(fontSize === "medium")}
-          onClick={() => changeFontSize("medium")}
-        >
-          A
-        </button>
-        <button
-          style={fontSizeBtn(fontSize === "large")}
-          onClick={() => changeFontSize("large")}
-        >
-          A+
-        </button>
-      </div>
-
-      {/* Logout */}
-      <div>
-        {showLogout && (
+      {/* 右：字号切换 + 用户菜单 */}
+      <div className="header-right">
+        {/* 字体大小切换 */}
+        <div className="header-fontsize-toggle">
           <button
-            onClick={() => {
-              logout();
-              navigate("/auth");
-            }}
-            style={btn}
+            className={fontSize === "small" ? "fs-btn active" : "fs-btn"}
+            onClick={() => changeFontSize("small")}
           >
-            Logout
+            A-
           </button>
-        )}
+          <button
+            className={fontSize === "medium" ? "fs-btn active" : "fs-btn"}
+            onClick={() => changeFontSize("medium")}
+          >
+            A
+          </button>
+          <button
+            className={fontSize === "large" ? "fs-btn active" : "fs-btn"}
+            onClick={() => changeFontSize("large")}
+          >
+            A+
+          </button>
+        </div>
+
+        {/* 用户 / Home / Logout 下拉 */}
+        <Dropdown
+          menu={{ items, onClick: onMenuClick }}
+          trigger={["click"]}
+        >
+          <button className="header-user-btn">
+            <span className="header-user-name">
+              {username || (role === "therapist" ? "Therapist" : "User")}
+            </span>
+            <DownOutlined />
+          </button>
+        </Dropdown>
       </div>
-    </header>
+    </div>
   );
 };
 
-export default Header;
-
-const btn = {
-  padding: "6px 12px",
-  marginRight: "10px",
-  cursor: "pointer",
-};
-
-const fontSizeBtn = (active) => ({
-  padding: "6px 12px",
-  margin: "0 5px",
-  border: active ? "2px solid #000" : "1px solid #aaa",
-  borderRadius: "4px",
-  cursor: "pointer",
-  color: active ? "#000" : "#555",
-  background: active ? "#e2e2e2" : "#fff",
-});
+export default HeaderBar;

@@ -536,7 +536,7 @@ const Mailbox = () => {
         addUserToGroup={addUserToGroup}
         approveUser={approveUser}
         reloadMailbox={load}
-      />
+      />{/* 把这个变成弹窗*/}
     </div>
     
   );
