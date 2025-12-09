@@ -37,10 +37,10 @@ export const useFontSize = () => useContext(FontSizeContext);
 const sizeToScale = (size) => {
   switch (size) {
     case "small":
-      return 0.8;   // 稍微小一点
+      return 0.8;  
     case "large":
-      return 1.4;   // 稍微大一点
+      return 1.4;   
     default:
-      return 1;     // medium
+      return 1;     
   }
 };

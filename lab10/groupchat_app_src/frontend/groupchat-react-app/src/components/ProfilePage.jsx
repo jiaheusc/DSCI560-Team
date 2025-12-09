@@ -42,7 +42,7 @@ const ProfilePage = () => {
   const { token,role } = useAuth();
 
   const cfg = profileConfig[role];
-
+  const DEFAULT_AVATAR = "/static/avatars/default.png";
   const [profile, setProfile] = useState({});
   const [edit, setEdit] = useState({});
   const [avatars, setAvatars] = useState([]);
@@ -60,7 +60,7 @@ const ProfilePage = () => {
     const cleaned = {};
     cfg.fields.forEach(f => cleaned[f.key] = p[f.key] || "");
 
-    cleaned.avatar_url = p.avatar_url || "";
+    cleaned.avatar_url = p.avatar_url || DEFAULT_AVATAR;
     cleaned.created_at = p.created_at ? new Date(p.created_at).toLocaleString() : "";
     cleaned.updated_at = p.updated_at ? new Date(p.updated_at).toLocaleString() : "";
 

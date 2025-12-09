@@ -220,12 +220,10 @@ button:hover {
 
 .question-block .question {
   margin-bottom: 10px;
-  font-size: 1em;   /* 原 16px */
+  font-size: 1em;   
   font-weight: 600;
   color: #334155;
 }
-
-/* label 左对齐 */
 .question-block label {
   display: flex;
   flex-direction: row;
@@ -243,18 +241,40 @@ button:hover {
   border-radius: 8px;
 }
 
-/* radio / checkbox layout */
 .question-block input[type="radio"],
 .question-block input[type="checkbox"] {
   margin-top: 4px;
   flex-shrink: 0;
 }
 
-/* error text */
 .error-message {
   color: #dc2626;
-  font-size: 0.875em; /* 原 14px */
+  font-size: 0.875em; 
   margin-top: 6px;
+}
+.card.questionnaire-card {
+  max-width: 45em;       /* ≈ 720px，当 html=16px 时 */
+  margin: 1em auto 1.5em;
+}
+
+.card.questionnaire-card h2 {
+  font-size: 1.05em;
+  margin-bottom: 0.9em;
+}
+
+.submit-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.75em;
+  border-radius: 999px;
+}
+
+@media (min-width: 40em) {
+  .submit-btn {
+    width: auto;
+    min-width: 11em;
+    margin-left: auto;
+  }
 }
 
 /* ================================
@@ -435,6 +455,40 @@ button:hover {
   height: 100%;
   min-height: 0; /* 让内部 flex 子元素可以滚动 */
 }
+/* 群列表里，每个 group 下方的成员头像行 */
+.group-members-row {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 小圆头像 */
+.group-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  object-fit: cover;
+}
+
+/* 没头像时，用名字首字母 */
+.group-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+/* 多出来的成员数量，比如 +3 */
+.group-members-more {
+  font-size: 0.75em;
+  color: #64748b;
+  margin-left: 2px;
+}
 
 /* 左侧 Sidebar */
 .chat-sidebar {
@@ -479,7 +533,7 @@ button:hover {
   color: #777;
 }
 
-/* 右侧聊天区 */
+/* 聊天区 */
 .chat-main {
   flex: 1;
   display: flex;
