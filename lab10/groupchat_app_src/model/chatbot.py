@@ -128,9 +128,6 @@ class ResourceRetriever:
 
 
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch, os
-
 class SupportLLM:
     def __init__(self, model_name: str):
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -290,7 +287,9 @@ class MentalHealthChatbot:
             flagged_risk=False
         )
     
-        # ========= NEW: crisis/hate auto-response =========
+        
+
+        
     async def respond_to_flagged(self, tag: str, message: str, recent_messages: list[str]) -> str:
         """
         Create an immediate AI response when moderation tagged a message.

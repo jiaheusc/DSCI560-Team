@@ -62,15 +62,12 @@ class GroupRecommender:
           - top_candidates: [(group_id, sim)]  (first 5 for transparency)
         """
         with self.Session() as sess:
-            # 1) get user embedding (read-only; try cache first; never write)
-            e, dim = self._get_user_embedding_readonly(sess, user_id)
+            
+            # 1) get or CREATE the user embedding (reads cache; otherwise computes & upserts)
+            e, dim = self._get_or_create_embedding(sess, user_id)
             if e is None:
-                # build on the fly (still read-only; do not store)
-                q_json = self._load_answers(sess, user_id)
-                if q_json is None:
-                    return {"decision":"no_groups_configured","group_id":None,"score":0.0,
-                            "threshold":SIM_THRESHOLD,"reason":"no_questionnaire","top_candidates":[]}
-                e, dim = self._embed_answers(q_json)
+                return {"decision":"no_groups_configured","group_id":None,"score":0.0,
+                        "threshold":SIM_THRESHOLD,"reason":"no_questionnaire","top_candidates":[]}
 
             # 2) fetch candidate groups (active; not full if MAX_GROUP_FILTER)
             candidates = self._fetch_candidates(sess)
@@ -117,7 +114,48 @@ class GroupRecommender:
                     "top_candidates": top5
                 }
 
+    def _get_or_create_embedding(self, sess, user_id: int) -> Tuple[Optional[np.ndarray], Optional[int]]:
+        """
+        Read user embedding if present; otherwise compute from questionnaire,
+        write to user_questionnaire_embeddings, and return (e, dim).
+        """
+        # 1) cached?
+        row = sess.execute(text(
+            "SELECT model, dim, vec FROM user_questionnaire_embeddings WHERE user_id=:u"
+        ), {"u": user_id}).fetchone()
+        if row:
+            return _l2(_from_blob(row.vec, row.dim)), int(row.dim)
 
+        # 2) need to compute
+        q_json = self._load_answers(sess, user_id)
+        if q_json is None:
+            return None, None
+        e, dim = self._embed_answers(q_json)  # returns L2-normalized float32 + dim
+
+        # 3) upsert (MySQL vs SQLite/Postgres)
+        is_mysql = str(self.db_url).startswith("mysql")
+        if is_mysql:
+            upsert_sql = """
+                INSERT INTO user_questionnaire_embeddings (user_id, model, dim, vec)
+                VALUES (:u, :m, :d, :v)
+                ON DUPLICATE KEY UPDATE model=:m, dim=:d, vec=:v
+            """
+        else:
+            upsert_sql = """
+                INSERT INTO user_questionnaire_embeddings (user_id, model, dim, vec)
+                VALUES (:u, :m, :d, :v)
+                ON CONFLICT(user_id) DO UPDATE SET
+                model=excluded.model, dim=excluded.dim, vec=excluded.vec
+            """
+
+        sess.execute(
+            text(upsert_sql),
+            {"u": user_id, "m": self.embed_model_name, "d": int(dim), "v": _to_blob(e)}
+        )
+        # Commit so other services (writer, centroid ops) can see it immediately
+        sess.commit()
+
+        return e, int(dim)
     def _get_user_embedding_readonly(self, sess, user_id: int) -> Tuple[Optional[np.ndarray], Optional[int]]:
         row = sess.execute(text(
             "SELECT model, dim, vec FROM user_questionnaire_embeddings WHERE user_id=:u"
@@ -304,7 +342,7 @@ class GroupWriter:
             return {"ok": True, "group_id": gid}
         
 
-        
+
 # --- Centroid maintenance for backend: incremental + full rebuild ---
 from typing import Optional, List, Tuple
 import numpy as np
