@@ -1,118 +1,116 @@
-"""
-    @software{minishlab2024model2vec,
-    author       = {Stephan Tulkens and {van Dongen}, Thomas},
-    title        = {Model2Vec: Fast State-of-the-Art Static Embeddings},
-    year         = {2024},
-    publisher    = {Zenodo},
-    doi          = {10.5281/zenodo.17270888},
-    url          = {https://github.com/MinishLab/model2vec},
-    license      = {MIT}
-    }
-
-"""
+from typing import List, Dict, Any, Optional
+import json, re
 
 
+class LLMRedFlagJudge:
 
+    SYSTEM_PROMPT = (
+        "You are a safety and support assistant for a mental-health group chat. "
+        "Classify the given message (with brief recent context) into exactly one severity level:\n"
+        "1 = nothing_happens  → benign or routine content.\n"
+        "2 = notice           → potentially concerning content (subtle self-harm ideation, "
+        "hopelessness, harassment hints, escalating conflict) that merits support/monitoring.\n"
+        "3 = alert            → explicit or strongly implied self-harm/suicide intent, "
+        "imminent danger, or severe hate/harassment targeting a person/group. Immediate escalation.\n\n"
+        "Also provide a coarse category: one of [self-harm, hate, harassment, other]. "
+        "Do NOT give medical diagnoses. Be concise and neutral."
+    )
 
+    OUTPUT_INSTRUCTIONS = (
+        "Return STRICT JSON with keys exactly:\n"
+        "{\n"
+        '  "level": 1|2|3,\n'
+        '  "label": "nothing_happens"|"notice"|"alert",\n'
+        '  "category": "self-harm"|"hate"|"harassment"|"other",\n'
+        '  "rationale": "one short sentence explaining the decision"\n'
+        "}\n"
+        "No extra text."
+    )
 
-# - Self-harm: enguard/tiny-guard-4m-en-prompt-self-harm-binary-moderation
-# - Hate     : enguard/tiny-guard-4m-en-prompt-hate-binary-moderation
-#
-#   detect_self_harm(text) -> 'PASS' | 'FAIL'
-#   detect_hate(text)      -> 'PASS' | 'FAIL'
-#   check_both(text)       -> {'self_harm': 'PASS|FAIL', 'hate': 'PASS|FAIL'}
-#   batch_check_both(texts)-> [{'self_harm':..., 'hate':...}, ...]
-#
-# Install:
-#   pip install "model2vec[inference]" torch
+    def __init__(self, llm=None, model_name: Optional[str] = None):
+        """
+        llm: an instance of SupportLLM from your chatbot.py (preferred, reuses the loaded model)
+        model_name: if llm is None, provide a HF model name (e.g., 'Qwen/Qwen2.5-1.5B-Instruct')
+        """
+        if llm is not None:
+            self.llm = llm
+        else:
+            from chatbot import SupportLLM 
+            self.llm = SupportLLM(model_name or "Qwen/Qwen2.5-1.5B-Instruct")
 
-from typing import List, Dict
-from model2vec.inference import StaticModelPipeline
+        self._base_temp = getattr(self.llm, "temperature", 0.7)
+        self._base_topp = getattr(self.llm, "top_p", 0.9)
+        self._base_rep  = getattr(self.llm, "repetition_penalty", 1.05)
 
+    def _parse_json(self, text: str) -> Dict[str, Any]:
+        try:
+            return json.loads(text)
+        except Exception:
+            m = re.search(r"\{.*\}", text, re.DOTALL)
+            if m:
+                try:
+                    return json.loads(m.group(0))
+                except Exception:
+                    pass
+        return {}
 
-_SELF_HARM_MODEL = None
-_HATE_MODEL = None
-
-def _get_self_harm_model() -> StaticModelPipeline:
-    global _SELF_HARM_MODEL
-    if _SELF_HARM_MODEL is None:
-        _SELF_HARM_MODEL = StaticModelPipeline.from_pretrained(
-            "enguard/small-guard-32m-en-prompt-self-harm-binary-moderation"
+    def classify(self, message: str, recent: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        message: the new message to judge
+        recent:  optional list of recent chat strings (oldest -> newest)
+        """
+        recent = recent or []
+        context = "Recent messages:\n" + "\n".join(f"- {r}" for r in recent) if recent else "Recent messages: (none)"
+        user_prompt = (
+            f"{context}\n\n"
+            f"Message to classify:\n\"\"\"{message.strip()}\"\"\"\n\n"
+            f"{self.OUTPUT_INSTRUCTIONS}"
         )
-    return _SELF_HARM_MODEL
 
-def _get_hate_model() -> StaticModelPipeline:
-    global _HATE_MODEL
-    if _HATE_MODEL is None:
-        _HATE_MODEL = StaticModelPipeline.from_pretrained(
-            "enguard/small-guard-32m-en-prompt-hate-speech-binary-moderation"
-        )
-    return _HATE_MODEL
+        orig_t, orig_p, orig_r = self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = 0.2, 0.95, 1.0
+        out = self.llm.generate(self.SYSTEM_PROMPT, history=[], user_message=user_prompt).strip()
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_t, orig_p, orig_r
 
+        obj = self._parse_json(out)
 
-def detect_self_harm(text: str) -> str:
-    """
-    Return 'PASS' or 'FAIL' from the self-harm model.
-    Empty/whitespace is treated as 'PASS'.
-    """
-    t = (text or "").strip()
-    if not t:
-        return "PASS"
-    return _get_self_harm_model().predict([t])[0]
+        lvl_map = {1: "nothing_happens", 2: "notice", 3: "alert"}
+        level = int(obj.get("level", 1)) if str(obj.get("level", "")).strip().isdigit() else 1
+        if level not in (1, 2, 3):
+            level = 1
+        label = obj.get("label") or lvl_map[level]
+        if label not in ("nothing_happens", "notice", "alert"):
+            label = lvl_map[level]
+        category = obj.get("category", "other")
+        if category not in ("self-harm", "hate", "harassment", "other"):
+            category = "other"
+        rationale = str(obj.get("rationale", "")).strip() or "No rationale provided."
 
-def detect_hate(text: str) -> str:
-    """
-    Return 'PASS' or 'FAIL' from the hate model.
-    Empty/whitespace is treated as 'PASS'.
-    """
-    t = (text or "").strip()
-    if not t:
-        return "PASS"
-    return _get_hate_model().predict([t])[0]
+   
+        from chatbot import enforce_no_diagnosis  # reuse your helper
+        rationale = enforce_no_diagnosis(rationale)
 
-def check_both(text: str) -> Dict[str, str]:
-    """
-    Check both categories for a single string.
-    Returns {'self_harm': 'PASS|FAIL', 'hate': 'PASS|FAIL'}.
-    """
-    return {
-        "self_harm": detect_self_harm(text),
-        "hate": detect_hate(text),
-    }
+        return {
+            "level": level,
+            "label": label,
+            "category": category,
+            "rationale": rationale,
+            "raw": out  # keep raw for logging/audit if you want
+        }
 
-def batch_check_both(texts: List[str]) -> List[Dict[str, str]]:
-    """
-    Batch version for efficiency: runs each model once across the non-empty subset,
-    then stitches results back to the original order.
-    """
-    if not texts:
-        return []
+    def batch_classify(self, texts: List[str]) -> List[Dict[str, Any]]:
+        return [self.classify(t) for t in texts]
 
-    cleaned = [(x or "").strip() for x in texts]
-    idx = [i for i, s in enumerate(cleaned) if s]
-
-    out_self: List[str] = ["PASS"] * len(cleaned)
-    out_hate: List[str] = ["PASS"] * len(cleaned)
-
-    if idx:
-        non_empty = [cleaned[i] for i in idx]
-        sh_labels = _get_self_harm_model().predict(non_empty)
-        ht_labels = _get_hate_model().predict(non_empty)
-        for k, i in enumerate(idx):
-            out_self[i] = sh_labels[k]
-            out_hate[i] = ht_labels[k]
-
-    return [{"self_harm": s, "hate": h} for s, h in zip(out_self, out_hate)]
+"""
+bot = MentalHealthChatbot()             
+from red_flag_detector import LLMRedFlagJudge
+judge = LLMRedFlagJudge(llm=bot.llm)
 
 
-if __name__ == "__main__":
-    samples = [
-        "I want to hurt myself.",
-        "You don't belong here.",
-        "I'm dying to see that movie!",
-        "   ",
-        "We should kick them out.",
-        "I feel unsafe; who can I call?",
-    ]
-    for s, res in zip(samples, batch_check_both(samples)):
-        print(f"{res} | {s}")
+res = judge.classify(
+    "I don't want to be here anymore.",
+    recent=["are you okay?", "we care about you"]
+)
+print(res)
+# -> {'level': 3, 'label': 'alert', 'category': 'self-harm', 'rationale': '...','raw': '...'}
+"""

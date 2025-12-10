@@ -34,11 +34,17 @@ def _l2(v: np.ndarray) -> np.ndarray:
 class GroupRecommender:
     SENSITIVE_QUESTIONS = {"Age Group", "Gender"}
     QUESTION_WEIGHTS = {
-        "What are you mainly looking for here?": 1.4,
-        "What are you currently struggling with the most?": 1.6,
-        "What kind of group atmosphere feels most comfortable to you?": 1.3,
-        "How do you prefer to communicate?": 1.2,
+        "lookingFor": 1.4,        # Q1
+        "struggles": 1.7,         # Q2
+        "topics": 1.5,            # Q3
+        "coping": 1.1,            # Q4
+        "atmosphere": 1.3,        # Q5
+        "sharingComfort": 1.2,    # Q6
+        "safePeople": 1.2,        # Q7
+        "communication": 1.1,     # Q8
+        "interests": 1.0,         # Q9
     }
+
 
     def __init__(self, db_url: Optional[str] = None,
                  embed_model: str = EMBED_MODEL,
@@ -177,26 +183,51 @@ class GroupRecommender:
         v = self.embedder.encode([text_blob], normalize_embeddings=True, show_progress_bar=False)[0].astype(np.float32)
         return v, int(v.shape[0])
 
-    def _render_questionnaire_text(self, q_json: Dict[str, Any]) -> str:
-        items: List[Dict[str, Any]] = q_json.get("content", {}).get("mood", [])
-        lines: List[str] = []
-        for item in items:
-            q = str(item.get("question", "")).strip()
-            a = self._normalize_answer(item.get("answer"))
-            if not q or not a:
-                continue
-            if self.drop_sensitive and q in self.SENSITIVE_QUESTIONS:
-                continue
-            w = self.QUESTION_WEIGHTS.get(q, 1.0)
-            line = f"{q}: {a}"
-            if w > 1.0:
-                repeats = 1 if w < 1.35 else 2
-                for _ in range(repeats):
-                    lines.append(line)
+    def _render_questionnaire_text(self, q_json: dict) -> str:
+
+        # allow both shapes
+        content = q_json.get("content", q_json) if isinstance(q_json, dict) else {}
+
+        # map field -> human-readable title (only for readability; weights use field keys)
+        titles = {
+            "lookingFor": "Looking for",
+            "struggles": "Current struggles",
+            "topics": "Topics to explore",
+            "coping": "Coping when stressed",
+            "atmosphere": "Preferred atmosphere",
+            "sharingComfort": "Comfort sharing",
+            "safePeople": "Feel safest with",
+            "communication": "Communication style",
+            "interests": "Activities & interests",
+        }
+
+        pieces: list[str] = []
+
+        def add(field: str):
+            if field not in content:
+                return
+            val = content[field]
+            if isinstance(val, list):
+                ans = "; ".join(str(x).strip() for x in val if x)
             else:
-                lines.append(line)
-        txt = "\n".join(lines).strip()
-        return txt if txt else "no questionnaire content provided"
+                ans = str(val or "").strip()
+            if not ans:
+                return
+
+            w = self.QUESTION_WEIGHTS.get(field, 1.0)
+            repeats = 2 if w >= 1.4 else 1
+            line = f"{titles[field]}: {ans}"
+            for _ in range(repeats):
+                pieces.append(line)
+
+        for f in ["lookingFor","struggles","topics","coping",
+                "atmosphere","sharingComfort","safePeople",
+                "communication","interests"]:
+            add(f)
+
+        text_blob = "\n".join(pieces).strip()
+        return text_blob or "no questionnaire content provided"
+
 
     @staticmethod
     def _normalize_answer(ans: Any) -> str:

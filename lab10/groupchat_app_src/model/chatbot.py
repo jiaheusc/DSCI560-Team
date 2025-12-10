@@ -416,6 +416,152 @@ class MentalHealthChatbot:
         # restore generation knobs
         self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
         return results
+    
+    def summarize_chat(self, events: list[dict], sentences: int = 4, max_chars: int = 7000) -> str:
+        """
+        Summarize a whole group chat in a few sentences.
+        Input: events = [
+            {"user_id": "u123", "message": "text", "timestamp": "2025-12-01T12:30:00Z"},
+            ...
+        ]
+        - sentences: target number of sentences in the summary.
+        - max_chars: truncate transcript if the chat is huge (keeps recent messages preferentially).
+        Returns: plain-text summary (no diagnosis).
+        """
+        if not events:
+            return "No conversation to summarize."
+
+        # ---- normalize & sort by time ----
+        from datetime import datetime
+        def _parse_ts(ts):
+            if hasattr(ts, "isoformat"):  # datetime
+                return ts
+            # try several simple formats; fall back to raw string
+            for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ",
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        "%Y-%m-%d %H:%M:%S",
+                        "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(str(ts), fmt)
+                except Exception:
+                    pass
+            return str(ts)
+
+        cleaned = []
+        for e in events:
+            uid = str(e.get("user_id", "")).strip() or "user"
+            msg = str(e.get("message", "")).replace("\n", " ").strip()
+            ts  = e.get("timestamp")
+            if not msg:
+                continue
+            cleaned.append(( _parse_ts(ts), uid, msg ))
+
+        # If timestamps are mixed strings/datetimes, stable-sort by str()
+        cleaned.sort(key=lambda x: (str(x[0])))
+
+        # ---- compact transcript (limit length, keep most recent if too long) ----
+        # Format: "2025-12-01 12:30  u123: message"
+        lines = []
+        for ts, uid, msg in cleaned:
+            ts_txt = ts.isoformat(timespec="minutes") if hasattr(ts, "isoformat") else str(ts)
+            lines.append(f"{ts_txt}  {uid}: {msg}")
+
+        # If too long, keep from the END (recent context is more useful)
+        transcript = "\n".join(lines)
+        if len(transcript) > max_chars:
+            # keep last max_chars worth (cut to line boundary)
+            cut = transcript[-max_chars:]
+            # ensure we start at a new line to avoid mid-line cut
+            transcript = cut[cut.find("\n")+1:] if "\n" in cut else cut
+
+        # ---- prompt the LLM ----
+        system = (
+            "You are helping a facilitator by summarizing a GROUP CHAT. "
+            "Write a concise, neutral summary in a few sentences. "
+            "Avoid any medical diagnosis; do not label disorders. "
+            "Touch on: main themes, notable concerns, coping strategies discussed, "
+            "and overall tone. Keep it factual and supportive."
+        )
+        user_prompt = (
+            f"Target length: about {max(2, int(sentences))} sentences.\n\n"
+            "Transcript (chronological):\n"
+            + transcript +
+            "\n\nWrite the summary as plain text (no bullets)."
+        )
+
+        # Use slightly lower temperature for stable summaries
+        orig_temp, orig_top_p, orig_rep = self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = 0.3, 0.95, 1.0
+        summary = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt).strip()
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
+
+        # Final safety pass: remove accidental diagnostic phrasing
+        summary = enforce_no_diagnosis(summary)
+        return summary
+    
+    def summarize_chat(self, events: list[dict]) -> str:
+        """
+        Summarize a whole group chat in a concise paragraph (no sentence target, no truncation).
+        Input events: [{"user_id": "...", "message": "...", "timestamp": "2025-12-01T12:30:00Z"}, ...]
+        Returns plain-text summary (no diagnosis).
+        """
+        if not events:
+            return "No conversation to summarize."
+
+        from datetime import datetime
+
+        def _parse_ts(ts):
+            if hasattr(ts, "isoformat"):
+                return ts  # datetime
+            for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ",
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        "%Y-%m-%d %H:%M:%S",
+                        "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(str(ts), fmt)
+                except Exception:
+                    pass
+            return str(ts)
+
+        # normalize & sort chronologically
+        cleaned = []
+        for e in events:
+            uid = str(e.get("user_id", "")).strip() or "user"
+            msg = str(e.get("message", "")).replace("\n", " ").strip()
+            ts  = e.get("timestamp")
+            if not msg:
+                continue
+            cleaned.append((_parse_ts(ts), uid, msg))
+        cleaned.sort(key=lambda x: str(x[0]))
+
+        # build full transcript (no truncation)
+        lines = []
+        for ts, uid, msg in cleaned:
+            ts_txt = ts.isoformat(timespec="minutes") if hasattr(ts, "isoformat") else str(ts)
+            lines.append(f"{ts_txt}  {uid}: {msg}")
+        transcript = "\n".join(lines)
+
+        # prompt the LLM
+        system = (
+            "You are helping a facilitator by summarizing a GROUP CHAT. "
+            "Write one concise paragraph that captures main themes, notable concerns, "
+            "coping strategies discussed, and overall tone. "
+            "Stay neutral and supportive. Do NOT provide medical diagnoses."
+        )
+        user_prompt = (
+            "Transcript (chronological):\n"
+            + transcript +
+            "\n\nProduce a single concise paragraph (no bullets)."
+        )
+
+        # lower temperature for stable summaries
+        orig_temp, orig_top_p, orig_rep = self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = 0.3, 0.95, 1.0
+        summary = self.llm.generate(SAFETY_SYSTEM_PROMPT + "\n" + system, history=[], user_message=user_prompt).strip()
+        self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
+
+        return enforce_no_diagnosis(summary)
+
 
 
 
