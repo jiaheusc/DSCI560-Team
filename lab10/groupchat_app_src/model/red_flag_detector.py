@@ -54,7 +54,7 @@ class LLMRedFlagJudge:
                     pass
         return {}
 
-    def classify(self, message: str, recent: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def classify(self, message: str, recent: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         message: the new message to judge
         recent:  optional list of recent chat strings (oldest -> newest)

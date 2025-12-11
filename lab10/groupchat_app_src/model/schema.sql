@@ -104,5 +104,3 @@ CREATE TABLE IF NOT EXISTS group_profiles (
 
 -- Helpful index to scan active, recent groups (optional)
 CREATE INDEX IF NOT EXISTS idx_active_created ON chat_groups (is_active, created_at);
-
-

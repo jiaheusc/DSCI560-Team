@@ -160,3 +160,15 @@ CREATE TABLE IF NOT EXISTS daily_user_summaries (
     CONSTRAINT fk_dus_group FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
     CONSTRAINT fk_dus_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS message_flag_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    message_id INT NOT NULL,
+    level INT DEFAULT 1,
+    category VARCHAR(50),
+    rationale TEXT,
+    raw_response TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_message_log (message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
