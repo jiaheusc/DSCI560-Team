@@ -124,7 +124,30 @@ class Message(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="messages")
     group: Mapped["ChatGroups"] = relationship("ChatGroups", back_populates="messages")
+    flag_log: Mapped["MessageFlagLog"] = relationship(
+        "MessageFlagLog", 
+        back_populates="message", 
+        uselist=False, 
+        cascade="all, delete-orphan"
+    )
 
+class MessageFlagLog(Base):
+    __tablename__ = "message_flag_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), unique=True
+        )
+    level: Mapped[int] = mapped_column(default=1)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    message: Mapped["Message"] = relationship("Message", back_populates="flag_log")
+    
 # ---------------------------------------------------------
 # USER DAILY SUMMARY TABLE
 # ---------------------------------------------------------
@@ -261,8 +284,10 @@ class MailboxMessage(Base):
     __tablename__ = "mailbox_messages"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-
-    from_user: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    from_user: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), 
+        nullable=True 
+    )
     to_user: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
     content: Mapped[dict] = mapped_column(JSON, nullable=True)

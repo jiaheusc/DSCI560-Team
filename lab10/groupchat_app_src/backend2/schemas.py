@@ -158,6 +158,7 @@ class MessageResponse(BaseModel):
     id: int
     ai_opening_line: Optional[str] = None
     detail: Optional[str] = None
+    rationale: Optional[str] = None
 
 class SupportChatRequest(BaseModel):
     opening_message: str

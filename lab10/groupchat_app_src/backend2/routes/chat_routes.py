@@ -2,7 +2,11 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-from db import Message, ChatGroups, ChatGroupUsers, User, UserRole, UserProfile, get_db
+from db import (
+    Message, ChatGroups, ChatGroupUsers, User, UserRole, 
+    UserProfile, MessageFlagLog, UserTherapist, MailboxMessage, 
+    get_db, async_session_maker
+)
 from auth import get_current_user_token, verify_websocket_token
 from websocket_manager import ConnectionManager
 from llm import chat_completion
@@ -11,7 +15,7 @@ import asyncio
 from model.grouping import CentroidOps
 from utils.security import encrypt, decrypt
 from utils.task import get_chatbot
-from model.red_flag_detector import check_both
+from model.red_flag_detector import LLMRedFlagJudge
 from schemas import (
     TokenData, MessagePayload, GroupMessageListResponse, MessageResponse,
     ChatGroupCreate, ChatGroupListResponse, GroupMembersListResponse, SupportChatRequest, 
@@ -19,6 +23,46 @@ from schemas import (
 )
 
 # help functions
+ALERT_TEMPLATE = """
+    🔴 **CRITICAL SAFETY ALERT**
+    **Source**: User {user_id} (Group {group_id})
+    **Category**: {category} (Level {level})
+    **Rationale**: {rationale}
+
+    **Original Hidden Message**:
+    "{content}"
+"""
+
+async def notify_therapist(user_id, group_id, alert_data, original_content):
+    async with async_session_maker() as session:
+        therapist_id = await session.execute(
+                select(UserTherapist.therapist_id)
+                .where(UserTherapist.user_id == user_id)
+            ).scalar_one_or_none()
+        
+        alert_msg = ALERT_TEMPLATE.format(
+            user_id=user_id,
+            group_id=group_id,
+            category=alert_data.get('category'),
+            level=alert_data.get('level'),
+            rationale=alert_data.get('rationale'),
+            content=original_content
+        )
+        
+        new_mail = MailboxMessage(
+            from_user=None,
+            to_user=therapist_id,
+            is_read=False,
+            content={
+                "subject": "🔴 CRITICAL SAFETY ALERT",
+                "body": alert_msg,
+                "type": "alert",
+                "level": alert_data.get('level')
+            }
+        )
+        session.add(new_mail)
+        await session.commit()
+
 def update_group_centroids_safely(group_id: int, user_ids: list[int]):
     try:
         ops = CentroidOps(db_url="mysql+pymysql://chatuser:chatpass@localhost:3306/groupchat")
@@ -392,20 +436,36 @@ async def post_group_message(
         raise HTTPException(403)
 
     # check proper language
-    result: Dict[str, str] = check_both(payload.content)
-    
-    is_visible = True
-    intervention_needed = False
-    flag_type = None
+    stmt = (
+        select(Message)
+        .where(Message.group_id == group_id)
+        .order_by(Message.created_at.desc())
+        .limit(10)
+    )
+    db_msgs = (await session.execute(stmt)).scalars().all()
+    reversed_msgs = list(reversed(db_msgs))
 
-    if result.get("self_harm") == "FAIL":
-        is_visible = False
-        intervention_needed = True
-        flag_type = "self_harm"
-    elif result.get("hate") == "FAIL":
-        is_visible = False
-        intervention_needed = True
-        flag_type = "hate"
+    recent_context = []
+    for msg in reversed_msgs:
+        try:
+            content = decrypt(msg.content)
+            recent_context.append(content)
+        except Exception:
+            pass
+
+    chatbot = get_chatbot()
+    judge = LLMRedFlagJudge(llm=chatbot.llm)
+
+    res = await judge.classify(
+        payload.content, 
+        recent=recent_context
+    )
+    level = res.get('level', 1)
+    is_dangerous = level >= 2 or res.get('label') == 'alert'
+    flag_type = res.get('category') if is_dangerous else None
+    rationale = res.get('rationale')
+
+    is_visible = not is_dangerous
 
     m = Message(
         user_id=token_data.user_id,
@@ -415,38 +475,44 @@ async def post_group_message(
         group_id=payload.group_id
     )
     session.add(m)
+    await session.flush()
+
+    flag_log = MessageFlagLog(
+            message_id=m.id,
+            level=res.get('level'),
+            category=res.get('category'),
+            rationale=res.get('rationale'),
+            raw_response=res.get('raw')
+        )
+    session.add(flag_log)
     await session.commit()
     await session.refresh(m)
 
-    if intervention_needed:
-        stmt = (
-            select(Message)
-            .where(Message.group_id == group_id)
-            .order_by(Message.created_at.desc())
-            .limit(10)
-        )
-
-        msgs = list(reversed((await session.execute(stmt)).scalars().all()))
-
-        recent_msgs = []
-        for msg in msgs:
-            try:
-                content = decrypt(msg.content)
-                recent_msgs.append(content)
-            except Exception:
-                pass
+    if is_dangerous:
         
-        chatbot = get_chatbot()
         opening_line = await chatbot.respond_to_flagged(
             tag = flag_type,
             message = payload.content,
-            recent_messages = recent_msgs
+            recent_messages=recent_context
         )
+
+        if level >= 3:
+            # sent a message to therapist
+            # what should i write could be a good one
+            asyncio.create_task(
+                notify_therapist(
+                    user_id=token_data.user_id,
+                    group_id=payload.group_id,
+                    alert_data=res,
+                    original_content=payload.content
+                )
+            )
         return {
             "ok": False, 
             "id": m.id,
             "ai_opening_line": opening_line,
-            "detail": flag_type
+            "detail": flag_type,
+            "rationale": rationale
         }
     else:
         await broadcast_message(session, m, payload.group_id)
