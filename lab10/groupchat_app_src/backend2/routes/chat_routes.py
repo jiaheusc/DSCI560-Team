@@ -147,7 +147,7 @@ async def maybe_answer_with_llm(sender_id: int, content: str, group_id: int):
             print(f"--- LLM Response Duration: {duration:.2f} seconds ---")
         except Exception as e:
             reply = f"(LLM error) Chatbot failed to generate reply. Error: {str(e)}"
-        print(reply)
+        # print(reply)
         bot_msg = Message(
             user_id=None, content=encrypt(reply),
             is_bot=True, group_id=group_id
@@ -535,6 +535,77 @@ async def start_support_chat(
     session.add(ai_msg)
     await session.commit()
     return {"ok": True} 
+    
+@router.post("/support-chat/summary")
+async def summarize_chat(
+    payload: MessagePayload,
+    token_data: TokenData = Depends(get_current_user_token),
+    session: AsyncSession = Depends(get_db)
+):
+    group_id = payload.group_id
+    # check membership
+    stmt = select(ChatGroupUsers).where(
+        ChatGroupUsers.group_id == group_id,
+        ChatGroupUsers.user_id == token_data.user_id,
+        ChatGroupUsers.is_active == True
+    )
+    if not (await session.execute(stmt)).scalar_one_or_none():
+        raise HTTPException(403)
+    
+    m = Message(
+        user_id=token_data.user_id,
+        content=encrypt(payload.content),
+        is_visible=True,
+        is_bot=False,
+        group_id=payload.group_id
+    )
+    session.add(m)
+    await session.commit()
+    await broadcast_message(session, m, payload.group_id)
+
+    # summary
+    stmt = (
+        select(Message)
+        .where(
+            Message.group_id == group_id,
+            Message.is_visible == True
+        )
+        .order_by(Message.created_at.desc())
+        .limit(50)
+    )
+    db_msgs = (await session.execute(stmt)).scalars().all()
+    reversed_msgs = list(reversed(db_msgs))
+
+    recent_msgs_list = []
+    for msg in reversed_msgs:
+        try:
+            recent_msgs_list.append({
+                "user_id": msg.user_id,
+                "message": decrypt(msg.content),
+                "timestamp": msg.created_at
+            })
+        except Exception:
+            pass
+
+    chatbot = get_chatbot()
+
+    try:
+        summary_text = await chatbot.summarize_chat(recent_msgs_list)
+    except Exception as e:
+        print(f"Summary generation failed: {e}")
+        summary_text = "Sorry, I failed to generate the summary at this moment."
+
+    bot_msg = Message(
+        user_id=None, content=encrypt(summary_text),
+        is_bot=True, group_id=group_id
+    )
+    session.add(bot_msg)
+    await session.commit()
+    await session.refresh(bot_msg)
+
+    await broadcast_message(session, bot_msg, group_id)
+    return {"ok": True, "summary": summary_text}
+    
     
 @router.websocket("/ws")
 async def websocket_endpoint(

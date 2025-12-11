@@ -417,7 +417,7 @@ class MentalHealthChatbot:
         self.llm.temperature, self.llm.top_p, self.llm.repetition_penalty = orig_temp, orig_top_p, orig_rep
         return results
     
-    def summarize_chat(self, events: list[dict], sentences: int = 4, max_chars: int = 7000) -> str:
+    async def summarize_chat(self, events: list[dict], sentences: int = 4, max_chars: int = 7000) -> str:
         """
         Summarize a whole group chat in a few sentences.
         Input: events = [
