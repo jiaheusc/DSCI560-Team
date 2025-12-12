@@ -46,6 +46,7 @@ const ChatRoom = () => {
 
   const bottomRef = useRef(null);
   const wsRef = useRef(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   const [showWarning, setShowWarning] = useState(false);
   const [warningType, setWarningType] = useState("");
@@ -103,18 +104,22 @@ const ChatRoom = () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    setMessages(data.messages || []);
+    const visibleMessages = (data.messages || []).filter(
+      (m) => m.is_visible !== false
+    );
+
+    setMessages(visibleMessages);
   };
 
   const loadGroupInfo = async (gid) => {
-    // 成员信息
+    // group info
     const res = await fetch(`/api/chat-groups/${gid}/members`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
     setMembers(data.members || []);
 
-    // 群名称
+    // group name
     const ginfo = await fetch(`/api/chat-groups`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -126,7 +131,7 @@ const ChatRoom = () => {
     }
   };
 
-  // websocket 连接
+  // websocket 
   const connectWS = (gid) => {
     if (wsRef.current) wsRef.current.close();
 
@@ -145,7 +150,13 @@ const ChatRoom = () => {
   };
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    if (trimmed.toLowerCase().startsWith("@WeMindBot summary")) {
+      await handleSummarize(trimmed);
+      setInput("");   
+      return;
+    }
 
     const res = await fetch("/api/messages", {
       method: "POST",
@@ -161,7 +172,7 @@ const ChatRoom = () => {
 
     const data = await res.json();
 
-    // 后端危险内容检测
+    // dangerous message detection
     if (data.ok === false) {
       setWarningType(data.detail);
       setAiOpeningLine(data.ai_opening_line || "");
@@ -169,13 +180,44 @@ const ChatRoom = () => {
       return;
     }
 
-    // 正常发送
+    // normal sed
     setInput("");
   };
+  const handleSummarize = async (triggerText) => {
+    if (isSummarizing) return;
+    setIsSummarizing(true);
+
+    try {
+      const res = await fetch("/api/support-chat/summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          group_id: Number(groupId),
+          content:
+            triggerText ||
+            "Please summarize the recent group conversation.",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        alert("Failed to generate summary. Please try again.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Network error while summarizing.");
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
 
   return (
     <div className="chatroom-container">
-      {/* Header：群名 + 编辑 */}
+      {/* Header：name + edit */}
       <div
         className="chatroom-header"
         style={{
@@ -255,41 +297,52 @@ const ChatRoom = () => {
           )}
         </div>
       </div>
-
+      <div className="chat-msg-wrapper">
       {/* Message List */}
-      <div className="chat-msg-list">
-        {messages.map((m) => {
-          // 优先用 user_id 判断自己（如果后端已经加了 user_id）
-          const isMeById =
-            !m.is_bot &&
-            typeof m.user_id !== "undefined" &&
-            Number(m.user_id) === numericUserId;
+        <div className="chat-msg-list">
+          {messages.map((m) => {
+            // user_id first
+            const isMeById =
+              !m.is_bot &&
+              typeof m.user_id !== "undefined" &&
+              Number(m.user_id) === numericUserId;
 
-          // 如果没有 user_id，就退回用 username 判断
-          const isMeByName =
-            !m.is_bot && myUsername && m.username === myUsername;
+            // then username
+            const isMeByName =
+              !m.is_bot && myUsername && m.username === myUsername;
 
-          const isMe = isMeById || isMeByName;
+            const isMe = isMeById || isMeByName;
 
-          // 用 members 里的 prefer_name 作为展示名
-          const member = members.find((u) => u.username === m.username);
-          const displayName = m.is_bot
-            ? "WeMind AI"
-            : member?.prefer_name ||
-              member?.username ||
-              m.username ||
-              "Unknown";
+            // prefer name
+            const member = members.find((u) => u.username === m.username);
+            const displayName = m.is_bot
+              ? "WeMind AI"
+              : member?.prefer_name ||
+                member?.username ||
+                m.username ||
+                "Unknown";
 
-          return (
-            <div key={m.id} className={`msg-row ${isMe ? "me" : ""}`}>
-              <div className="msg-body">
-                <div className="msg-username">{displayName}</div>
-                <div className="msg-bubble">{m.content}</div>
+            return (
+              <div key={m.id} className={`msg-row ${isMe ? "me" : ""}`}>
+                <div className="msg-body">
+                  <div className="msg-username">{displayName}</div>
+                  <div className="msg-bubble">{m.content}</div>
+                </div>
               </div>
-            </div>
-          );
-        })}
-        <div ref={bottomRef} />
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+        <button
+          className="summary-chip summary-fab"
+          onClick={handleSummarize}
+          disabled={isSummarizing}
+        >
+          <span className="summary-chip-text">
+            {isSummarizing ? "Summarizing..." : "Help me summarize group chat"}
+          </span>
+        </button>
+        
       </div>
 
       {/* Input */}
@@ -308,7 +361,7 @@ const ChatRoom = () => {
         <button onClick={sendMessage}>Send</button>
       </div>
 
-      {/* Danger 检测弹窗 */}
+      {/* Danger detection */}
       {showWarning && (
         <div className="modal-overlay">
           <div className="modal-box">
@@ -363,7 +416,7 @@ const ChatRoom = () => {
                     }),
                   });
 
-                  // 跳转到 AI 群聊，不刷新整站
+                  // goto ai chat 
                   navigate(`/chat/${aiGroup.id}`);
                 }}
               >
