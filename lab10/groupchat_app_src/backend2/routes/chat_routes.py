@@ -561,6 +561,7 @@ async def summarize_chat(
     )
     session.add(m)
     await session.commit()
+    await session.refresh(m)
     await broadcast_message(session, m, payload.group_id)
 
     # summary
