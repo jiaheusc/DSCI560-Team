@@ -1,5 +1,6 @@
 from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
+from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from db import (
@@ -35,10 +36,10 @@ ALERT_TEMPLATE = """
 
 async def notify_therapist(user_id, group_id, alert_data, original_content):
     async with async_session_maker() as session:
-        therapist_id = await session.execute(
-                select(UserTherapist.therapist_id)
-                .where(UserTherapist.user_id == user_id)
-            ).scalar_one_or_none()
+        therapist_id = (await session.execute(
+            select(UserTherapist.therapist_id)
+            .where(UserTherapist.user_id == user_id)
+        )).scalar_one_or_none()
         
         alert_msg = ALERT_TEMPLATE.format(
             user_id=user_id,
@@ -525,6 +526,14 @@ async def start_support_chat(
     token_data: TokenData = Depends(get_current_user_token),
     session: AsyncSession = Depends(get_db)
 ):
+    stmt = select(ChatGroupUsers).where(
+        ChatGroupUsers.group_id == payload.group_id,
+        ChatGroupUsers.user_id == token_data.user_id,
+        ChatGroupUsers.is_active == True
+    )
+    if not (await session.execute(stmt)).scalar_one_or_none():
+        raise HTTPException(403, "Not a member of this group")
+    
     ai_msg = Message(
         user_id=None,
         group_id=payload.group_id,
