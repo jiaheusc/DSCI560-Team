@@ -499,7 +499,7 @@ class MentalHealthChatbot:
         summary = enforce_no_diagnosis(summary)
         return summary
     
-    def summarize_chat(self, events: list[dict]) -> str:
+    async def summarize_chat(self, events: list[dict]) -> str:
         """
         Summarize a whole group chat in a concise paragraph (no sentence target, no truncation).
         Input events: [{"user_id": "...", "message": "...", "timestamp": "2025-12-01T12:30:00Z"}, ...]
