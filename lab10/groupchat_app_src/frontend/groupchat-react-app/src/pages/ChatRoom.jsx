@@ -183,36 +183,60 @@ const ChatRoom = () => {
     // normal sed
     setInput("");
   };
-  const handleSummarize = async (triggerText) => {
-    if (isSummarizing) return;
-    setIsSummarizing(true);
+  const handleSummarize = async (triggerTextArg) => {
+  if (isSummarizing) return;
+  setIsSummarizing(true);
+
+  const triggerText =
+    typeof triggerTextArg === "string" ? triggerTextArg : undefined;
+
+  try {
+    const res = await fetch("/api/support-chat/summary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        group_id: Number(groupId),
+        content:
+          triggerText ||
+          "Please summarize the recent group conversation.",
+      }),
+    });
+
+    const rawText = await res.text();
+    let data = null;
 
     try {
-      const res = await fetch("/api/support-chat/summary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          group_id: Number(groupId),
-          content:
-            triggerText ||
-            "Please summarize the recent group conversation.",
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        alert("Failed to generate summary. Please try again.");
-      }
+      data = rawText ? JSON.parse(rawText) : null;
     } catch (e) {
-      console.error(e);
-      alert("Network error while summarizing.");
-    } finally {
-      setIsSummarizing(false);
+      console.warn("Summary API returned non-JSON:", rawText);
     }
-  };
+
+    if (!res.ok || (data && data.ok === false)) {
+      console.error(
+        "Summary API error:",
+        res.status,
+        data || rawText
+      );
+      const msg =
+        data?.detail ||
+        data?.error ||
+        rawText ||
+        "Failed to generate summary. Please try again.";
+      alert(msg);
+      return;
+    }
+
+  } catch (e) {
+    console.error("Network error while summarizing:", e);
+    alert("Network error while summarizing.");
+  } finally {
+    setIsSummarizing(false);
+  }
+};
+
 
 
   return (
@@ -335,7 +359,7 @@ const ChatRoom = () => {
         </div>
         <button
           className="summary-chip summary-fab"
-          onClick={handleSummarize}
+          onClick={() => handleSummarize()}
           disabled={isSummarizing}
         >
           <span className="summary-chip-text">
