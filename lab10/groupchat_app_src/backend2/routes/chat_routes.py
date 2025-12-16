@@ -134,10 +134,34 @@ async def maybe_answer_with_llm(sender_id: int, content: str, group_id: int):
     from db import SessionLocal, Message
     chatbot = get_chatbot()
     async with SessionLocal() as session:
+        stmt = (
+            select(Message)
+            .where(
+                Message.group_id == group_id,
+                Message.is_visible == True
+            )
+            .order_by(Message.created_at.desc() )
+            .limit(5)
+        )
+        db_msgs = (await session.execute(stmt)).scalars().all()
+        reversed_msgs = list(reversed(db_msgs))
+
+        recent_msgs_list = []
+        for msg in reversed_msgs:
+            try:
+                user_id = msg.user_id if msg.user_id is not None else "ai_bot"
+                recent_msgs_list.append({
+                    "user_id": user_id,
+                    "message": decrypt(msg.content),
+                    "timestamp": msg.created_at
+                })
+            except Exception:
+                pass
+        
         req = ChatRequest(
             user_id=str(sender_id),
             message=content,
-            history=[] # 历史记录为空
+            history=recent_msgs_list
         )
         start_time = time.time()
         try:
@@ -397,7 +421,10 @@ async def get_group_messages(
     
     stmt = (
         select(Message)
-        .where(Message.group_id == group_id)
+        .where(
+            Message.group_id == group_id,
+            Message.is_visible == True
+        )
         .order_by(desc(Message.created_at), desc(Message.id))
         .limit(limit)
     )
@@ -439,9 +466,12 @@ async def post_group_message(
     # check proper language
     stmt = (
         select(Message)
-        .where(Message.group_id == group_id)
+        .where(
+            Message.group_id == group_id, 
+            Message.is_visible == True
+        )
         .order_by(Message.created_at.desc())
-        .limit(10)
+        .limit(5)
     )
     db_msgs = (await session.execute(stmt)).scalars().all()
     reversed_msgs = list(reversed(db_msgs))
@@ -580,7 +610,7 @@ async def summarize_chat(
             Message.group_id == group_id,
             Message.is_visible == True
         )
-        .order_by(Message.created_at.desc())
+        .order_by(Message.created_at.desc() )
         .limit(50)
     )
     db_msgs = (await session.execute(stmt)).scalars().all()
@@ -589,8 +619,9 @@ async def summarize_chat(
     recent_msgs_list = []
     for msg in reversed_msgs:
         try:
+            user_id = msg.user_id if msg.user_id is not None else "ai_bot"
             recent_msgs_list.append({
-                "user_id": msg.user_id,
+                "user_id": user_id,
                 "message": decrypt(msg.content),
                 "timestamp": msg.created_at
             })
