@@ -152,7 +152,7 @@ const ChatRoom = () => {
   const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    if (trimmed.toLowerCase().startsWith("@WeMindBot summary")) {
+    if (trimmed.toLowerCase().startsWith("@wemindbot summary")) {
       await handleSummarize(trimmed);
       setInput("");   
       return;
