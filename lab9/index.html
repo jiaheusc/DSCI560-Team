@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Box</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="main-container">
+        <div id="sidebar">
+            <h3>Chat with Documents</h3>
+            <div class="upload-area">
+                <label for="file-upload" class="browse-btn">Browse Files</label>
+                <input type="file" id="file-upload" multiple hidden>
+            </div>
+
+            <div class="file-constraints">
+                Max file size: 10MB. Format: .pdf
+            </div>
+
+            <div class="file-list-container">
+                <h4>Uploaded Files</h4>
+                <ul id="file-list"></ul>
+            </div>
+        </div>
+        <div class="main-part">
+            <div class="logo-area">
+                <span class="logo-text">Chatbot 5</span>
+            </div>
+            <div class="message-container"></div>
+
+            <form class="input-container">
+                <textarea
+                    id="prompt-input"
+                    placeholder="Type any phrase and get suggestions"
+                    rows="2"
+                    spellcheck="false"
+                ></textarea>
+                
+                <button type="submit" class="submit-btn" aria-label="send">
+                  send
+                </button>
+            </form>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
