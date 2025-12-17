@@ -1,9 +1,0 @@
-CREATE TABLE IF NOT EXISTS reddit_posts (
-    id VARCHAR(20) PRIMARY KEY,
-    title TEXT,
-    content TEXT,
-    author_masked VARCHAR(50),
-    timestamp DATETIME,
-    keywords TEXT,
-    image_text TEXT
-);

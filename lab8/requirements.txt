@@ -1,7 +1,0 @@
-pandas
-numpy
-gensim
-mysql-connector-python
-scikit-learn
-matplotlib
-seaborn

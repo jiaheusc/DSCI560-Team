@@ -1,7 +1,0 @@
-pandas
-yfinance
-mysql-connector-python
-prophet
-scikit-learn
-joblib
-torch
