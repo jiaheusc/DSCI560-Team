@@ -1,21 +1,18 @@
 # DSCI560-Team
-# 1. Clone the repository
-```bash
+1. Clone the repository
 git clone https://github.com/jiaheusc/DSCI560-Team
 cd DSCI560-Team/groupchat_app_src/sql
 
-# 2. Set up the database
+2. Set up the database
 mysql -u root -p < schema.sql
 
-# 3. Set up the backend
-```bash
+3. Set up the backend
 cd ../backend
 With your Python virtual environment activated, run:
 pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8000
 
-# 4. Set up the frontend
-```bash
+4. Set up the frontend
 cd ../frontend/groupchat-react-app
 npm install
 npm start
